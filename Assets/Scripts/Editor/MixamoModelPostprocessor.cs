@@ -10,6 +10,8 @@ namespace CharacterControllerSystem.EditorTools
     ///  - Humanoid rig (avatar created from each model)
     ///  - clip renamed from "mixamo.com" to the name after '@' in the file name
     ///  - loop enabled for cyclic locomotion clips
+    /// Applied on first import only, so anything changed afterwards in the model's
+    /// Import Settings Inspector is kept on reimport.
     /// </summary>
     public class MixamoModelPostprocessor : AssetPostprocessor
     {
@@ -33,6 +35,7 @@ namespace CharacterControllerSystem.EditorTools
             if (!IsArtFbx) return;
 
             var importer = (ModelImporter)assetImporter;
+            if (!importer.importSettingsMissing) return;
             importer.animationType = ModelImporterAnimationType.Human;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             importer.optimizeGameObjects = false;      // keep bones for sockets / IK
@@ -48,6 +51,7 @@ namespace CharacterControllerSystem.EditorTools
             if (!IsArtFbx) return;
 
             var importer = (ModelImporter)assetImporter;
+            if (!importer.importSettingsMissing) return;
             var clips = importer.defaultClipAnimations;
             if (clips == null || clips.Length == 0) return;
 

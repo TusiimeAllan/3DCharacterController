@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -7,12 +8,14 @@ using UnityEngine.InputSystem;
 namespace CharacterControllerSystem
 {
     /// <summary>
-    /// Swaps the visual character model under the Player while keeping the shared Humanoid
-    /// Animator running. Current state, normalized time, layer weights and parameters are
-    /// captured before the swap and restored after rebinding, so the new character continues
-    /// the exact same animation frame.
-    /// Tab / Gamepad RB = next, Gamepad LB = previous, 1-9 = pick directly.
+    /// Inspector-driven character switcher. Every character model lives as a child of the
+    /// Player in the hierarchy (nothing is spawned at runtime); only the active one is enabled.
+    /// All models share the Player's Humanoid Animator. Changing Active Index in the Inspector
+    /// applies immediately in Edit Mode, and in Play Mode it also carries over the current
+    /// animation state, time and parameters so the new character continues the same frame.
     /// </summary>
+    [ExecuteAlways]
+    [DisallowMultipleComponent]
     [RequireComponent(typeof(Animator))]
     public class CharacterSwitcher : MonoBehaviour
     {
@@ -20,25 +23,33 @@ namespace CharacterControllerSystem
         public class CharacterEntry
         {
             public string Name;
-            [Tooltip("Humanoid model (FBX root or prefab)")]
-            public GameObject Model;
-            [Tooltip("Humanoid avatar. Falls back to the model's own Animator avatar if empty.")]
+            [Tooltip("The character model child object under the Player")]
+            public GameObject Root;
+            [Tooltip("Humanoid avatar for this model")]
             public Avatar Avatar;
         }
 
-        public CharacterEntry[] Characters = Array.Empty<CharacterEntry>();
-        public int StartIndex;
-        [Tooltip("Parent for the spawned model. Defaults to this transform.")]
-        public Transform MeshParent;
-        [Tooltip("Name of the existing model child to replace on the first switch.")]
-        public string MeshChildName = "Mesh";
+        [SerializeField] private Animator _animator;
+        public List<CharacterEntry> Characters = new List<CharacterEntry>();
+        [SerializeField] private int _activeIndex;
+
+        [Header("Play Mode")]
+        [Tooltip("Tab / 1-9 / Gamepad LB-RB switch characters while playing")]
+        public bool EnableHotkeys = true;
         public bool ShowHint = true;
 
-        public int CurrentIndex { get; private set; } = -1;
         public event Action<int> CharacterChanged;
 
-        private Animator _animator;
-        private GameObject _current;
+        public int ActiveIndex
+        {
+            get => _activeIndex;
+            set => SwitchTo(value);
+        }
+
+        public CharacterEntry ActiveCharacter =>
+            _activeIndex >= 0 && _activeIndex < Characters.Count ? Characters[_activeIndex] : null;
+
+        private int _appliedIndex = -1;
 
         private struct LayerSnapshot
         {
@@ -47,27 +58,42 @@ namespace CharacterControllerSystem
             public float Weight;
         }
 
-        private void Awake()
-        {
-            _animator = GetComponent<Animator>();
-            if (MeshParent == null) MeshParent = transform;
-            var existing = MeshParent.Find(MeshChildName);
-            if (existing != null) _current = existing.gameObject;
-        }
+        private void Reset() => _animator = GetComponent<Animator>();
 
-        private void Start()
+        private void OnEnable() => Apply(_activeIndex, false);
+
+#if UNITY_EDITOR
+        private void OnValidate()
         {
-            if (Characters.Length > 0) SwitchTo(Mathf.Clamp(StartIndex, 0, Characters.Length - 1));
+            if (_animator == null) _animator = GetComponent<Animator>();
+            if (Characters.Count > 0) _activeIndex = Mathf.Clamp(_activeIndex, 0, Characters.Count - 1);
+            if (_activeIndex == _appliedIndex) return;
+
+            // Hierarchy changes are not allowed inside OnValidate, so apply on the next editor tick.
+            UnityEditor.EditorApplication.delayCall += () =>
+            {
+                if (this == null) return;
+                Apply(_activeIndex, Application.isPlaying);
+                if (!Application.isPlaying)
+                {
+                    foreach (var c in Characters)
+                        if (c?.Root != null) UnityEditor.EditorUtility.SetDirty(c.Root);
+                    UnityEditor.EditorUtility.SetDirty(_animator);
+                }
+            };
         }
+#endif
 
         private void Update()
         {
 #if ENABLE_INPUT_SYSTEM
+            if (!Application.isPlaying || !EnableHotkeys || Characters.Count == 0) return;
+
             var kb = Keyboard.current;
             if (kb != null)
             {
                 if (kb.tabKey.wasPressedThisFrame) Next();
-                for (int i = 0; i < Characters.Length && i < 9; i++)
+                for (int i = 0; i < Characters.Count && i < 9; i++)
                     if (kb[Key.Digit1 + i].wasPressedThisFrame) SwitchTo(i);
             }
 
@@ -80,70 +106,57 @@ namespace CharacterControllerSystem
 #endif
         }
 
-        public void Next() => SwitchTo((CurrentIndex + 1) % Characters.Length);
-        public void Previous() => SwitchTo((CurrentIndex - 1 + Characters.Length) % Characters.Length);
+        public void Next() { if (Characters.Count > 0) SwitchTo((_activeIndex + 1) % Characters.Count); }
+        public void Previous() { if (Characters.Count > 0) SwitchTo((_activeIndex - 1 + Characters.Count) % Characters.Count); }
 
         public void SwitchTo(int index)
         {
-            if (Characters.Length == 0 || index < 0 || index >= Characters.Length) return;
-            if (index == CurrentIndex) return;
+            if (index == _appliedIndex) return;
+            Apply(index, Application.isPlaying);
+        }
 
+        private void Apply(int index, bool preserveAnimation)
+        {
+            if (_animator == null || Characters.Count == 0) return;
+            index = Mathf.Clamp(index, 0, Characters.Count - 1);
             var entry = Characters[index];
-            if (entry == null || entry.Model == null)
+            if (entry == null || entry.Root == null) return;
+
+            bool canPreserve = preserveAnimation && _appliedIndex >= 0 &&
+                               _animator.isActiveAndEnabled && _animator.runtimeAnimatorController != null;
+            LayerSnapshot[] layers = canPreserve ? CaptureLayers() : null;
+            AnimatorControllerParameter[] parameters = canPreserve ? _animator.parameters : null;
+            object[] values = canPreserve ? CaptureParameters(parameters) : null;
+
+            for (int i = 0; i < Characters.Count; i++)
             {
-                Debug.LogWarning($"[CharacterSwitcher] Character {index} has no model assigned.");
-                return;
+                var root = Characters[i]?.Root;
+                if (root != null && root.activeSelf != (i == index)) root.SetActive(i == index);
             }
 
-            bool preserve = CurrentIndex >= 0 && _animator.isActiveAndEnabled && _animator.runtimeAnimatorController != null;
-            LayerSnapshot[] layers = preserve ? CaptureLayers() : null;
-            AnimatorControllerParameter[] parameters = preserve ? _animator.parameters : null;
-            object[] values = preserve ? CaptureParameters(parameters) : null;
+            bool avatarChanged = _animator.avatar != entry.Avatar;
+            _animator.avatar = entry.Avatar;
 
-            // Remove the old model from the hierarchy right now so Rebind does not see it.
-            if (_current != null)
+            if (Application.isPlaying && (avatarChanged || canPreserve))
             {
-                _current.SetActive(false);
-                _current.transform.SetParent(null, false);
-                Destroy(_current);
-            }
-
-            var model = Instantiate(entry.Model, MeshParent, false);
-            model.name = MeshChildName;
-            model.transform.localPosition = Vector3.zero;
-            model.transform.localRotation = Quaternion.identity;
-
-            Avatar avatar = entry.Avatar;
-            if (model.TryGetComponent<Animator>(out var childAnimator))
-            {
-                if (avatar == null) avatar = childAnimator.avatar;
-                // Only the root Animator drives the skeleton.
-                childAnimator.enabled = false;
-                Destroy(childAnimator);
-            }
-
-            if (avatar == null || !avatar.isHuman)
-                Debug.LogWarning($"[CharacterSwitcher] '{entry.Name}' has no Humanoid avatar; animation retargeting may fail.");
-
-            _current = model;
-            _animator.avatar = avatar;
-            _animator.Rebind();
-
-            if (preserve)
-            {
-                RestoreParameters(parameters, values);
-                for (int i = 0; i < layers.Length && i < _animator.layerCount; i++)
+                _animator.Rebind();
+                if (canPreserve)
                 {
-                    if (i > 0) _animator.SetLayerWeight(i, layers[i].Weight);
-                    _animator.Play(layers[i].StateHash, i, layers[i].NormalizedTime);
+                    RestoreParameters(parameters, values);
+                    for (int i = 0; i < layers.Length && i < _animator.layerCount; i++)
+                    {
+                        if (i > 0) _animator.SetLayerWeight(i, layers[i].Weight);
+                        _animator.Play(layers[i].StateHash, i, layers[i].NormalizedTime);
+                    }
                 }
+                // Evaluate now so the new model never shows a bind pose frame.
+                _animator.Update(0f);
             }
 
-            // Evaluate immediately so the new model never shows a bind pose frame.
-            _animator.Update(0f);
-
-            CurrentIndex = index;
-            CharacterChanged?.Invoke(index);
+            bool changed = _appliedIndex != index;
+            _activeIndex = index;
+            _appliedIndex = index;
+            if (changed) CharacterChanged?.Invoke(index);
         }
 
         private LayerSnapshot[] CaptureLayers()
@@ -186,7 +199,7 @@ namespace CharacterControllerSystem
             for (int i = 0; i < parameters.Length; i++)
             {
                 var p = parameters[i];
-                if (_animator.IsParameterControlledByCurve(p.nameHash)) continue;
+                if (values[i] == null || _animator.IsParameterControlledByCurve(p.nameHash)) continue;
                 switch (p.type)
                 {
                     case AnimatorControllerParameterType.Float: _animator.SetFloat(p.nameHash, (float)values[i]); break;
@@ -198,10 +211,9 @@ namespace CharacterControllerSystem
 
         private void OnGUI()
         {
-            if (!ShowHint || Characters.Length == 0 || CurrentIndex < 0) return;
-            string name = Characters[CurrentIndex].Name;
+            if (!Application.isPlaying || !ShowHint || ActiveCharacter == null) return;
             GUI.Label(new Rect(12, 12, 600, 24),
-                $"Character: {name}   [Tab / 1-{Mathf.Min(Characters.Length, 9)} / LB-RB to switch]");
+                $"Character: {ActiveCharacter.Name}   [Tab / 1-{Mathf.Min(Characters.Count, 9)} / LB-RB to switch]");
         }
     }
 }

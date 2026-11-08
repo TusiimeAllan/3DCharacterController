@@ -47,9 +47,13 @@ namespace CharacterControllerSystem
         public float StandingHeight = 1.8f;
         public float CrouchingHeight = 1.2f;
 
-        [Header("Camera")]
+        [Header("References")]
         [Tooltip("Transform the movement is oriented against. Usually the main camera.")]
         public Transform CameraTransform;
+        [SerializeField] private CharacterController _controller;
+        [SerializeField] private PlayerInputs _input;
+        [Tooltip("Optional. Leave empty to run without animation.")]
+        [SerializeField] private Animator _animator;
 
         // player state
         private float _speed;
@@ -71,24 +75,33 @@ namespace CharacterControllerSystem
         private int _animMotionSpeed;
         private int _animCrouch;
 
-        private CharacterController _controller;
-        private PlayerInputs _input;
-        private Animator _animator;
         private bool _hasAnimator;
 
         private const float _threshold = 0.01f;
 
-        private void Awake()
+        private void Reset() => AutoAssignReferences();
+
+#if UNITY_EDITOR
+        private void OnValidate() => AutoAssignReferences();
+#endif
+
+        /// <summary>Editor-time convenience: fills empty references from this GameObject.</summary>
+        private void AutoAssignReferences()
         {
-            if (CameraTransform == null && Camera.main != null)
-                CameraTransform = Camera.main.transform;
+            if (_controller == null) _controller = GetComponent<CharacterController>();
+            if (_input == null) _input = GetComponent<PlayerInputs>();
+            if (_animator == null) _animator = GetComponent<Animator>();
         }
 
         private void Start()
         {
-            _controller = GetComponent<CharacterController>();
-            _input = GetComponent<PlayerInputs>();
-            _hasAnimator = TryGetComponent(out _animator);
+            if (_controller == null || _input == null)
+            {
+                Debug.LogError($"[{nameof(ThirdPersonController)}] Assign CharacterController and PlayerInputs in the Inspector.", this);
+                enabled = false;
+                return;
+            }
+            _hasAnimator = _animator != null;
             AssignAnimationIDs();
 
             _jumpTimeoutDelta = JumpTimeout;
