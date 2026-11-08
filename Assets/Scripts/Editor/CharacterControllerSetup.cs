@@ -23,6 +23,8 @@ namespace CharacterControllerSystem.EditorTools
         private const string ControllerPath = AnimDir + "/PlayerAnimator.controller";
         private const string PrefabPath = "Assets/Art/Characters/Player.prefab";
         private const string InputAsset = "Assets/Settings/Input/PlayerControls.inputactions";
+        private const string ManInSuitModel = "Assets/Art/Characters/ManInSuit/Man In Suit@T-Pose.fbx";
+        private const string SwitchScenePath = "Assets/Scenes/CharacterSwitch.unity";
 
         [MenuItem("Tools/Character Controller/1. Build Animator Controller")]
         public static AnimatorController BuildAnimator()
@@ -152,8 +154,58 @@ namespace CharacterControllerSystem.EditorTools
         [MenuItem("Tools/Character Controller/3. Setup Playable Scene")]
         public static void SetupScene()
         {
+            if (PopulateScene() == null) return;
+            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
+            Debug.Log("[CharacterController] Scene ready. Press Play.");
+        }
+
+        [MenuItem("Tools/Character Controller/4. Build Character Switch Scene")]
+        public static void BuildCharacterSwitchScene()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            var player = PopulateScene();
+            if (player == null) return;
+
+            var switcher = player.AddComponent<CharacterSwitcher>();
+            switcher.Characters = new[]
+            {
+                Entry("X Bot", XBotModel),
+                Entry("Man In Suit", ManInSuitModel),
+            }.Where(e => e != null).ToArray();
+
+            EditorSceneManager.SaveScene(scene, SwitchScenePath);
+
+            var buildScenes = EditorBuildSettings.scenes.ToList();
+            if (buildScenes.All(s => s.path != SwitchScenePath))
+            {
+                buildScenes.Add(new EditorBuildSettingsScene(SwitchScenePath, true));
+                EditorBuildSettings.scenes = buildScenes.ToArray();
+            }
+
+            Debug.Log($"[CharacterController] Character switch scene saved at {SwitchScenePath}. " +
+                      "Press Play, then Tab / 1-2 to switch.");
+        }
+
+        private static CharacterSwitcher.CharacterEntry Entry(string name, string modelPath)
+        {
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            if (model == null)
+            {
+                Debug.LogWarning($"[CharacterController] Model not found at {modelPath}, skipping.");
+                return null;
+            }
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<Avatar>().FirstOrDefault();
+            if (avatar == null || !avatar.isHuman)
+                Debug.LogWarning($"[CharacterController] {modelPath} has no valid Humanoid avatar.");
+            return new CharacterSwitcher.CharacterEntry { Name = name, Model = model, Avatar = avatar };
+        }
+
+        private static GameObject PopulateScene()
+        {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) ?? BuildPlayerPrefab();
-            if (prefab == null) return;
+            if (prefab == null) return null;
 
             // Ground.
             if (Object.FindObjectsByType<MeshCollider>(FindObjectsSortMode.None).Length == 0 &&
@@ -188,9 +240,7 @@ namespace CharacterControllerSystem.EditorTools
             var tpCam = cam.GetComponent<ThirdPersonCamera>() ?? cam.gameObject.AddComponent<ThirdPersonCamera>();
             tpCam.Target = player.transform.Find("CameraRoot");
             tpCam.Input = player.GetComponent<PlayerInputs>();
-
-            EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-            Debug.Log("[CharacterController] Scene ready. Press Play.");
+            return player;
         }
 
         [MenuItem("Tools/Character Controller/Build Everything")]
