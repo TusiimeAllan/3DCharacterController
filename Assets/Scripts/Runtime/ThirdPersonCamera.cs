@@ -17,7 +17,7 @@ namespace CharacterControllerSystem
         public float Distance = 4.0f;
         public float MouseSensitivity = 1.0f;
         [Tooltip("Extra look height above the target pivot")]
-        public float HeightOffset = 1.6f;
+        public float HeightOffset = 0f;
         public float TopClamp = 70.0f;
         public float BottomClamp = -30.0f;
 

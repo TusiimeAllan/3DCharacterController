@@ -197,7 +197,7 @@ namespace CharacterControllerSystem.EditorTools
             if (prefab == null) return null;
 
             // Replace an existing rig so re-running stays idempotent.
-            foreach (var old in Object.FindObjectsByType<ThirdPersonController>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var old in Object.FindObjectsByType<ThirdPersonController>(FindObjectsInactive.Include))
                 Undo.DestroyObjectImmediate(old.gameObject);
 
             if (p.CreateGroundIfMissing && GameObject.Find("Ground") == null)
@@ -209,7 +209,7 @@ namespace CharacterControllerSystem.EditorTools
             }
 
             if (p.CreateSunIfMissing &&
-                Object.FindObjectsByType<Light>(FindObjectsSortMode.None).All(l => l.type != LightType.Directional))
+                Object.FindObjectsByType<Light>().All(l => l.type != LightType.Directional))
             {
                 var sun = new GameObject("Directional Light").AddComponent<Light>();
                 sun.type = LightType.Directional;
@@ -236,6 +236,10 @@ namespace CharacterControllerSystem.EditorTools
             Undo.RecordObject(tpCam, "Wire Camera");
             tpCam.Target = player.transform.Find("CameraRoot");
             tpCam.Input = player.GetComponent<PlayerInputs>();
+            tpCam.HeightOffset = p.CameraLookOffset;
+            tpCam.Distance = p.CameraDistance;
+            Undo.RecordObject(cam.transform, "Wire Camera");
+            cam.transform.rotation = Quaternion.Euler(p.CameraStartPitch, 0f, 0f);
 
             var tpc = player.GetComponent<ThirdPersonController>();
             Undo.RecordObject(tpc, "Wire Camera");

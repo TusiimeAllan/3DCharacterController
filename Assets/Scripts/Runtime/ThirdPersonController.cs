@@ -78,6 +78,7 @@ namespace CharacterControllerSystem
         private bool _hasAnimator;
 
         private const float _threshold = 0.01f;
+        private readonly Collider[] _groundHits = new Collider[8];
 
         private void Reset() => AutoAssignReferences();
 
@@ -134,8 +135,18 @@ namespace CharacterControllerSystem
         {
             Vector3 spherePosition = new Vector3(transform.position.x,
                 transform.position.y - GroundedOffset, transform.position.z);
-            Grounded = Physics.CheckSphere(spherePosition, GroundedRadius, GroundLayers,
+            // Ignore the player's own colliders, otherwise the check always reports grounded.
+            int hits = Physics.OverlapSphereNonAlloc(spherePosition, GroundedRadius, _groundHits, GroundLayers,
                 QueryTriggerInteraction.Ignore);
+            Grounded = false;
+            for (int i = 0; i < hits; i++)
+            {
+                if (!_groundHits[i].transform.IsChildOf(transform))
+                {
+                    Grounded = true;
+                    break;
+                }
+            }
 
             if (_hasAnimator) _animator.SetBool(_animGrounded, Grounded);
         }

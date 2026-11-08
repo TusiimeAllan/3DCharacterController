@@ -59,8 +59,16 @@ namespace CharacterControllerSystem.EditorTools
         public float Radius = 0.28f;
         [Range(0f, 90f)] public float SlopeLimit = 45f;
         public float StepOffset = 0.3f;
-        public float CameraRootHeight = 1.6f;
         public LayerMask GroundLayers = 1;
+
+        [Header("Camera")]
+        [Tooltip("Height of the CameraRoot socket the camera orbits (head height)")]
+        public float CameraRootHeight = 1.6f;
+        [Tooltip("Extra look height above CameraRoot")]
+        public float CameraLookOffset = 0f;
+        public float CameraDistance = 4f;
+        [Tooltip("Starting pitch in degrees")]
+        public float CameraStartPitch = 15f;
 
 #if ENABLE_INPUT_SYSTEM
         [Header("Input")]
