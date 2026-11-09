@@ -1,11 +1,5 @@
-﻿// ================================================================================================
-// File: MxMTrajectoryGenerator_BasicAI.cs
-// 
-// Authors:  Kenneth Claassen
-// Date:     23-04-2020: Created this file.
-// 
-//     Contains a part of the 'MxM' namespace for 'Unity Engine'. 
-// ================================================================================================
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
+
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.AI;
@@ -129,7 +123,11 @@ namespace MxM
         *********************************************************************************************/
         public void FixedUpdate()
         {
+#if UNITY_6000_1_OR_NEWER
             if (p_animator.updateMode == AnimatorUpdateMode.Fixed)
+#else
+            if (p_animator.updateMode == AnimatorUpdateMode.AnimatePhysics)
+#endif
             {
                 UpdatePastTrajectory(Time.fixedDeltaTime);
             }
@@ -145,7 +143,11 @@ namespace MxM
         *********************************************************************************************/
         public void Update()
         {
+#if UNITY_6000_1_OR_NEWER
             if (p_animator.updateMode != AnimatorUpdateMode.Fixed)
+#else
+            if (p_animator.updateMode != AnimatorUpdateMode.AnimatePhysics)
+#endif
             {
                 UpdatePastTrajectory(Time.deltaTime);
             }

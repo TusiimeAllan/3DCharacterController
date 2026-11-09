@@ -1,11 +1,5 @@
-﻿// ================================================================================================
-// File: MxMAnimator.cs
-// 
-// Authors:  Kenneth Claassen
-// Date:     2018-11-03: Created this file.
-// 
-//     Contains a part of the 'MxM' namespace for 'Unity Engine'.
-// ================================================================================================
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
+
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -78,11 +72,11 @@ namespace MxM
         
         //Advanced Options
         [SerializeField] private ETagBlendMethod m_tagBlendMethod = ETagBlendMethod.HighestWeight; //How tags should be blended between digital poses. Highest weight? or combined?
-        
+
         //Update Manager
         [SerializeField] private bool m_priorityUpdate = true;
-        [SerializeField] private float m_maxUpdateDelay = 1f;
-
+        [SerializeField] private float m_maxUpdateDelay = 0.5f;    
+        
         //Trajectory Error Warping
         [SerializeField] private WarpModule m_overrideWarpSettings = null;                                                  //A settings module which overrides all warp settings
         [SerializeField] private EAngularErrorWarp m_angularWarpType = EAngularErrorWarp.On;                                //The type of angular warping to be used
@@ -190,7 +184,6 @@ namespace MxM
        // private float m_timeDialation = 0f;           //The difference in time between the actual update interval and the desired update interval
        private float m_timeSinceLastLeftFootstep = 0f;  //The time that has passed since the last left footstep was triggered
        private float m_timeSinceLastRightFootstep = 0f; //The time that has passed since the last right footstep was triggered
-       private float m_clipSpeedMod = 1f;               //The current speed modification based on the clip playing.
         
         //Trajectory Error Warping
         private ILongitudinalWarper m_longErrorWarper;  //Reference to a custom longitudinal error warper
@@ -219,6 +212,11 @@ namespace MxM
         private TrajectoryPoint[] m_desiredGoalBase;    //The un-modified desired goal taken directly from the Trajectory Generator
         private FSM m_fsm;                              //A state machine used to manage the internal states of the MxMAnimator
 
+        //Multi animator management
+       // private static int s_mxmAnimatorCount;              //Static counter for the number of active MxMAnimator components in the scene. This is used to assist with batch scheduling jobs when all MxMAnimators are read.
+        //private static int s_curMxMAnimatorId;              //Static id of the current MxMAnimator component being update. The jobs will be batch scheduled once this Id reaches s_mxmAnimatorCount
+       // private static int s_mxmAnimatorStack;              //The number of MxMAnimator's currently waiting to be scheduled
+
         //Inertial Blending
         private InertialBlendModule m_inertialBlendModule;  //Experimental module for inertial blending
 
@@ -233,6 +231,7 @@ namespace MxM
         public MxMAnimData[] AnimData { get { return m_animData; } set { m_animData = value; } }
         public Animator UnityAnimator { get { return p_animator; } }
         public bool IsPaused { get; private set; }
+        public bool IsInitialized { get; private set; } = false;
         public ref AnimationMixerPlayable MixerPlayable { get { return ref m_animationMixer; } }
         public ref AnimationLayerMixerPlayable LayerMixerPlayable { get { return ref m_animationLayerMixer; } }
         public bool BlendTrajectory { get { return m_applyTrajectoryBlending; } set { m_applyTrajectoryBlending = value; } }
@@ -298,33 +297,30 @@ namespace MxM
 
         public float UpdateRate
         {
-            get => 1 / m_updateInterval;
-            set => m_updateInterval = Mathf.Clamp(1 / value, 0f, 3f);
+            get { return 1 / m_updateInterval; }
+            set { m_updateInterval = Mathf.Clamp(1 / value, 0f, 3f); }
         }
 
         //Used to modify the blend time for the general motion matching state. Blend time is clamped
         public float BlendTime
         {
-            get => m_matchBlendTime;
-            set => m_matchBlendTime = Mathf.Clamp(value, 0.0001f, 5f);
-        }
-
+            get { return m_matchBlendTime; }
+            set { m_matchBlendTime = Mathf.Clamp(value, 0.0001f, 5f); }
+        } 
+        
         public bool PriorityUpdate
         {
             get => m_priorityUpdate;
             set => m_priorityUpdate = value;
         }
-
+        
         public float MaxUpdateDelay
         {
             get => m_maxUpdateDelay;
             set => m_maxUpdateDelay = Mathf.Max(0f, value);
         }
-        
-        
-
         public AnimatorUpdateMode UpdateMode => p_animator ? p_animator.updateMode : AnimatorUpdateMode.Normal;
-        public bool CanUpdate => !IsPaused && m_animMixerConnected;
+        public bool CanUpdate => !IsPaused && m_animMixerConnected && isActiveAndEnabled;
 
         [Obsolete("MatchBlendTime is deprecated. Please use 'BlendTime' instead")]
         public float MatchBlendTime
@@ -469,7 +465,84 @@ namespace MxM
             if (p_riggingIntegration != null)
                 p_riggingIntegration.CacheTransforms();
         }
-#endif       
+#endif
+        
+        //============================================================================================
+        /**
+        *  @brief Updates the MxMAnimator during the physics animation loop. 
+        *  
+        *  Note: The logic in this function will only run if the Animator Update mode is set to 
+        *  Animate Physics.
+        *         
+        *********************************************************************************************/
+        protected virtual void FixedUpdate_Internal()
+        {
+            if (CurrentAnimData == null)
+            {
+                return;
+            }
+            
+#if UNITY_6000_1_OR_NEWER
+            if (p_animator.updateMode == AnimatorUpdateMode.Fixed)
+#else
+            if (p_animator.updateMode == AnimatorUpdateMode.AnimatePhysics)
+#endif
+            {
+                p_currentDeltaTime = Time.fixedDeltaTime;
+
+                if (!IsPaused && m_animMixerConnected)
+                {
+#if UNITY_2019_1_OR_NEWER
+                    if (p_riggingIntegration != null)
+                        p_riggingIntegration.CacheTransforms();
+#endif
+                    //Run the first phase update for MxM which is responsible for scheduling jobs
+                    MxMUpdate_Phase1(p_currentDeltaTime);
+
+                    //if (m_rootMotion != null)
+                    //    m_rootMotion.AnimatorDependentUpdate(p_currentDeltaTime);
+                }
+            }
+        }
+
+        //============================================================================================
+        /**
+        *  @brief Updates the MxMAnimator during the regular update loop
+        *  
+        *  Note: The logic in this function will only run if the Animator Update mode is not set to 
+        *  Animate Physics.
+        *         
+        *********************************************************************************************/
+        protected virtual void Update_Internal()
+        {
+            if (CurrentAnimData == null)
+            {
+                return;
+            }
+            
+#if UNITY_6000_1_OR_NEWER
+            if (p_animator.updateMode != AnimatorUpdateMode.Fixed)
+#else
+            if (p_animator.updateMode != AnimatorUpdateMode.AnimatePhysics)
+#endif
+            {
+                p_currentDeltaTime = Time.deltaTime;
+
+                if (!IsPaused && m_animMixerConnected)
+                {
+#if UNITY_2019_1_OR_NEWER
+                    if (p_riggingIntegration != null)
+                        p_riggingIntegration.CacheTransforms();
+#endif
+                    //Run the first phase update for MxM which is responsible for scheduling jobs
+                    MxMUpdate_Phase1(p_currentDeltaTime);
+
+                    //if (m_rootMotion != null)
+                    //    m_rootMotion.AnimatorDependentUpdate(p_currentDeltaTime);
+                }
+            }
+        }
+
         //=============================================================================================
         /**
         *  @brief Called when the MxMAnimator component is destroyed. Destroys the playable graph and 
@@ -509,6 +582,11 @@ namespace MxM
 
             if (m_inertialBlendModule != null)
                 m_inertialBlendModule.DisposeNativeData();
+
+            if (MxMSearchManager.DoesInstanceExist)
+            {
+                MxMSearchManager.Instance.UnRegisterMxMAnimator(this);
+            }
         }
 
         //============================================================================================
@@ -518,7 +596,7 @@ namespace MxM
         *  interface.
         *         
         *********************************************************************************************/
-        protected virtual void OnAnimatorMove()
+        public virtual void OnAnimatorMove()
         {
             if (!m_animMixerConnected/* || IsPaused*/) 
                 return;
@@ -850,6 +928,7 @@ namespace MxM
             SetupExtensions();
 
             m_onSetupComplete.Invoke();
+            IsInitialized = true;
 
 #if UNITY_EDITOR
             DebugData = new MxMDebugger(this, m_maxMixCount, CurrentAnimData.PosePredictionTimes.Length);
@@ -984,7 +1063,7 @@ namespace MxM
                 p_riggingIntegration.Initialize(MxMPlayableGraph, p_animator);
 #endif
             
-            MxMSearchManager.Instance.RegisterMxMAnimator(this); //Todo: Also un-register
+            MxMSearchManager.Instance.RegisterMxMAnimator(this);
         }
 
         //============================================================================================
@@ -1120,13 +1199,13 @@ namespace MxM
         
         //============================================================================================
         /**
-         *   @brief This is the first phase update for the MxMAnimator. It is called by either of the 
-         *   MonoBehaviour FixedUpdate or Update method depending on the 'Animator' update mode. 
-         *   
-         *   Depending on the state of the MxMAnimator, this first phase update is responsible for 
-         *   scheduling the motion matching jobs. 
-         *          
-         * ********************************************************************************************/
+        *  @brief This is the first phase update for the MxMAnimator. It is called by either of the 
+        *  MonoBehaviour FixedUpdate or Update method depending on the 'Animator' update mode. 
+        *  
+        *  Depending on the state of the MxMAnimator, this first phase update is responsible for 
+        *  scheduling the motion matching jobs. 
+        *         
+        *********************************************************************************************/
         public void MxMUpdate_Phase1(float a_deltaTime)
         {
             p_currentDeltaTime = a_deltaTime;
@@ -1204,7 +1283,7 @@ namespace MxM
             {
                 return;
             }
-
+            
             if (m_fsm.CurrentStateId == (int)EMxMStates.Matching && m_poseSearchThisFrame)
             {
                 m_minimaJobHandle.Complete();
@@ -1249,48 +1328,46 @@ namespace MxM
             AnimationClip curClip = CurrentAnimData.Clips[m_chosenPose.PrimaryClipId];
 
             //Determine if a clip change must be enforced
-            if (!curClip.isLooping) //Todo: Reintroduce this
-            {
-                 // float blendTime = 0f;
-                 //
-                 // if (m_blendOutEarly)
-                 // {
-                 //     blendTime = m_matchBlendTime * m_animationStates[m_primaryBlendChannel].Weight * m_playbackSpeed;
-                 // }
+             if (!curClip.isLooping) 
+             {
+                 float blendTime = 0f;
+            
+                 if (m_blendOutEarly)
+                 {
+                     blendTime = m_matchBlendTime * m_animationStates[m_primaryBlendChannel].Weight * m_playbackSpeed;
+                 }
 
-                // if (m_chosenPose.AnimType == EMxMAnimtype.Composite)
-                // {
-                //     if (m_timeSinceMotionChosen + m_chosenPose.Time + blendTime > curClip.length + CurrentAnimData.PoseInterval * 5f)
-                //         m_enforcePoseSearch = true;
-                // }
-                // else
-                // {
-                //     if (m_timeSinceMotionChosen + m_chosenPose.Time + blendTime > curClip.length)
-                //         m_enforcePoseSearch = true;
-                // }
+                if (m_chosenPose.AnimType == EMxMAnimtype.Composite)
+                {
+                   /* if (m_timeSinceMotionChosen + m_chosenPose.Time + blendTime > curClip.length + CurrentAnimData.PoseInterval * 5f)
+                        m_enforcePoseSearch = true;*/
+                }
+                else
+                {
+                    if (m_timeSinceMotionChosen + m_chosenPose.Time + blendTime > curClip.length)
+                        m_enforcePoseSearch = true;
+                }
             }
-          
-            //Update blend spaces if the the dominant animation is a blend space
-            if (m_dominantPose.AnimType == EMxMAnimtype.BlendSpace)
+             
+             //Update blend spaces if the the dominant animation is a blend space
+             if (m_dominantPose.AnimType == EMxMAnimtype.BlendSpace)
                  UpdateBlendSpaces();
 
             if ((m_curInterpolatedPose.GenericTags & EGenericTags.DisableMatching) != EGenericTags.DisableMatching)
             {
                 ComputeCurrentPose();
-                if ((CurrentInterpolatedPose.Tags & ETags.DoNotUse) == ETags.DoNotUse)
-                {
-                    m_enforcePoseSearch = true;
-                }
+                
+                // if ((CurrentInterpolatedPose.Tags & ETags.DoNotUse) == ETags.DoNotUse)
+                // {
+                //     m_enforcePoseSearch = true;
+                // }
                 
                 GenerateGoalTrajectory(p_trajectoryGenerator.GetCurrentGoal());
-
-                if (m_doNotSearch)
-                    return;
-
-                float searchDelay = m_timeSinceMotionChosen - m_updateInterval;
-                if (searchDelay > 0f || m_enforcePoseSearch)
+                
+                if (!m_doNotSearch && 
+                    (m_timeSinceMotionUpdate > m_updateInterval || m_enforcePoseSearch))
                 {
-                    if (MxMSearchManager.Instance.RequestPoseSearch(this, searchDelay, m_enforcePoseSearch))
+                    if (MxMSearchManager.Instance.RequestPoseSearch(this, m_timeSinceMotionUpdate - m_updateInterval, m_enforcePoseSearch))
                     {
                         m_poseSearchThisFrame = true;
                         SchedulePoseSearch(); //Schedule the motion matching jobs
@@ -1315,7 +1392,7 @@ namespace MxM
         {
             if (m_poseSearchThisFrame)
             {
-               // m_timeSinceMotionUpdate = Mathf.Clamp(m_timeSinceMotionUpdate - m_updateInterval, 0f, m_updateInterval - p_currentDeltaTime);
+                // m_timeSinceMotionUpdate = Mathf.Clamp(m_timeSinceMotionUpdate - m_updateInterval, 0f, m_updateInterval - p_currentDeltaTime);
                 m_timeSinceMotionUpdate = 0f; //Todo: what about pro-rata (see above)?
                 
                 //Complete the pose and trajectory jobs
@@ -1473,11 +1550,10 @@ namespace MxM
                 if (animState.BlendStatus == EBlendStatus.None)
                     continue;
 
-                float animBlendVal = animState.Weight;
-
+                float animBlendVal;
                 if (i == m_primaryBlendChannel)
                 {
-                    animState.Age += p_currentDeltaTime * m_playbackSpeed;
+                    animState.Age += p_currentDeltaTime * m_playbackSpeed * animState.AnimSpeedMod; //Todo: Should speed mod be included here? it will affect blending speed
                     animBlendVal = Mathf.Sin((Mathf.PI / 2f) * Mathf.Clamp01(animState.Age / m_matchBlendTime));
 
                     animState.HighestWeight = animState.Weight = animBlendVal;
@@ -1503,7 +1579,7 @@ namespace MxM
                     else
                     {
                         animState.Weight = animBlendVal;
-                        animState.Age += p_currentDeltaTime * m_playbackSpeed;
+                        animState.Age += p_currentDeltaTime * m_playbackSpeed * animState.AnimSpeedMod; //Todo: Should speed mod be included here? it will affect blending speed
                         animState.DecayAge += p_currentDeltaTime * m_playbackSpeed;
                         ++totalBlendCount;
                     }
@@ -1541,7 +1617,6 @@ namespace MxM
 
                 //Update the new dominant state
                 ref MxMPlayableState playableState = ref m_animationStates[m_dominantBlendChannel];
-
                 playableState.BlendStatus = EBlendStatus.Dominant;
 
                 int dominantPoseId = playableState.StartPoseId;
@@ -1551,13 +1626,11 @@ namespace MxM
                 if (m_dominantPose.TracksId > -1)
                 {
                     float time = playableState.Time;
-                    if (leftGrounded != -1 && m_timeSinceLastLeftFootstep >= m_minFootstepInterval)
+                    //If the footstep is not grounded in the previous animation (i.e. grounded == -1) and then it is grounded in the new dominant animation (i.e.footStepId > -1) then we trigger an animation
+                    if (leftGrounded == -1 && m_timeSinceLastLeftFootstep >= m_minFootstepInterval)
                     {
                         FootstepTagTrackData leftSteps = CurrentAnimData.LeftFootSteps[m_dominantPose.TracksId];
                         int footStepId = leftSteps.IsGrounded(playableState.Time, ref m_cachedLastLeftFootstepId);
-                            
-                        // int footStepId =  leftSteps.GetStepStart(new Vector2(Mathf.Max(0f, time - m_matchBlendTime),
-                        //     time), ref m_cachedLastLeftFootstepId);
 
                         if (footStepId > -1)
                         {
@@ -1566,13 +1639,10 @@ namespace MxM
                         }
                     }
 
-                    if (rightGrounded != -1 && m_timeSinceLastRightFootstep >= m_minFootstepInterval)
+                    if (rightGrounded == -1 && m_timeSinceLastRightFootstep >= m_minFootstepInterval)
                     {
                         FootstepTagTrackData rightSteps = CurrentAnimData.RightFootSteps[m_dominantPose.TracksId];
                         int footStepId = rightSteps.IsGrounded(playableState.Time, ref m_cachedLastRightFootstepId);
-                            
-                        // int footStepId = rightSteps.GetStepStart(new Vector2(Mathf.Max(0f, time - m_matchBlendTime),
-                        //     time), ref m_cachedLastRightFootstepId);
 
                         if (footStepId > -1)
                         {
@@ -1602,23 +1672,21 @@ namespace MxM
         *********************************************************************************************/
         private void UpdateComplexAnims()
         {
-            //Todo: Fix this before merging
-            if (m_transitionMethod == ETransitionMethod.Inertialization)
-            {
-                return;
-            }
-            
+            // if (m_transitionMethod == ETransitionMethod.Inertialization)
+            // {
+            //     return;
+            // }
             
             for (int i = 0; i < m_animationStates.Length; ++i)
             {
                 ref MxMPlayableState playableState = ref m_animationStates[i];
 
-                if (!playableState.TargetPlayable.IsValid())
-                    continue;
-
                 if (playableState.BlendStatus == EBlendStatus.None)
                     continue;
-
+                
+                if (!playableState.TargetPlayable.IsValid())
+                    continue;
+                
                 if (playableState.AnimType == EMxMAnimtype.Composite)
                 {
                     if (playableState.TargetPlayable.GetInputCount() == 0)
@@ -3014,7 +3082,6 @@ namespace MxM
                 p_trajectoryGenerator.UnPause();
                 IsPaused = false;
                 m_animationMixer.Play();
-                
 #if UNITY_EDITOR
                 if (m_debugPreview)
                 {
@@ -3060,7 +3127,7 @@ namespace MxM
 
             if (m_warpingFoldout)
                 m_warpingFoldout = true;
-
+            
             if (m_optimisationFoldout)
                 m_optimisationFoldout = true;
 

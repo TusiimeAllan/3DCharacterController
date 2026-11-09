@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
+
+using System;
 using System.Collections.Generic;
 using Unity.Jobs;
 using UnityEngine;
@@ -9,12 +11,44 @@ namespace MxM
 {
     public class MxMSearchManager : MonoBehaviour
     {
-        [FormerlySerializedAs("m_maxUpdatesPerFrame")] [SerializeField] private int m_maxSearchesPerFrame;
-        [SerializeField] private float m_maxAllowableDelay;
-        [SerializeField] private int m_expectedAnimatorCount;
-        [SerializeField] private int m_expectedPhysicsAnimatorCount;
-        
-        public static MxMSearchManager Instance { get; private set; } = null;
+        [FormerlySerializedAs("m_maxUpdatesPerFrame")] [SerializeField] private int m_maxSearchesPerFrame = 1;
+        [SerializeField] private float m_maxAllowableDelay = 1f;
+        [SerializeField] private int m_expectedAnimatorCount = 3;
+        [SerializeField] private int m_expectedPhysicsAnimatorCount = 0;
+
+        private static MxMSearchManager m_instance = null;
+        public static MxMSearchManager Instance
+        {
+            get
+            {
+                if (m_instance == null)
+                {
+                    m_instance = FindObjectOfType<MxMSearchManager>();
+
+                    if (m_instance == null)
+                    {
+                        GameObject singletonObject = new GameObject("MxMSearchManager");
+                        m_instance = singletonObject.AddComponent<MxMSearchManager>();
+                        
+                        Debug.Log("Could not find instance of MxMSearchManager in scene, instance created programmatically.");
+                    }
+
+                    if (m_instance)
+                    {
+                        m_instance.Initialize();
+                    }
+                }
+
+                return m_instance;
+            }
+            
+            private set { m_instance = value;  }
+        }
+
+        public static bool DoesInstanceExist
+        {
+            get { return m_instance; }
+        }
 
         private List<MxMAnimator> m_mxmAnimators;
         private List<MxMAnimator> m_fixedUpdateMxMAnimators;
@@ -41,23 +75,19 @@ namespace MxM
             }
         }
 
-        
-        // Start is called before the first frame update
-        void Awake()
+        void Initialize()
         {
-            if (Instance != null)
-            {
-                Debug.LogWarning(
-                    "Attempting to create an MxMSearchManager but one already exists and only one is allowed.");
-                Destroy(this);
-                return;
-            }
-
-            Instance = this;
-
             m_mxmAnimators = new List<MxMAnimator>(m_expectedAnimatorCount);
             m_fixedUpdateMxMAnimators = new List<MxMAnimator>(m_expectedPhysicsAnimatorCount);
+        }
 
+        private void Awake()
+        {
+            if (!m_instance)
+            {
+                m_instance = this;
+                Initialize();
+            }
         }
 
         // Update is called once per frame
@@ -66,19 +96,27 @@ namespace MxM
             if (m_mxmAnimators.Count == 0)
                 return;
             
-            //foreach (MxMAnimator mxmAnimator in m_mxmAnimators)
-            int startIndex = m_animatorIndex;
+            int startIndex = Mathf.Clamp(m_animatorIndex, 0, Mathf.Max(0, m_mxmAnimators.Count-1));
             for(int i = 0; i < m_mxmAnimators.Count; ++i)
             {
-                int thisIndex = WrapIndex(startIndex + i, m_mxmAnimators.Count);
+                int thisIndex = (startIndex + i) % m_mxmAnimators.Count;
                 
                 MxMAnimator mxmAnimator = m_mxmAnimators[thisIndex];
-                if (mxmAnimator && mxmAnimator.CanUpdate)
+                if (mxmAnimator)
                 {
-#if UNITY_2019_1_OR_NEWER                    
-                    mxmAnimator.CacheRiggingIntegration();
-#endif                 
-                    mxmAnimator.MxMUpdate_Phase1(Time.deltaTime);
+                    if (mxmAnimator.CanUpdate)
+                    {
+#if UNITY_2019_1_OR_NEWER
+                        mxmAnimator.CacheRiggingIntegration();
+#endif
+                        mxmAnimator.MxMUpdate_Phase1(Time.deltaTime);
+                    }
+                }
+                else
+                {
+                    //Unregister any null mxmAnimators
+                    m_mxmAnimators.RemoveAt(thisIndex);
+                    --i;
                 }
             }
             
@@ -86,25 +124,31 @@ namespace MxM
             JobHandle.ScheduleBatchedJobs();
         }
 
-        int WrapIndex(int a_index, int a_maxIndex)
-        {
-            return a_index >= a_maxIndex ? a_index - a_maxIndex : a_index;
-        }
-        
         void FixedUpdate()
         {
             if (m_fixedUpdateMxMAnimators.Count == 0)
                 return;
             
+            int startIndex = Mathf.Clamp(m_fixedAnimatorIndex, 0, Mathf.Max(0, m_fixedUpdateMxMAnimators.Count-1));
             for(int i = 0; i < m_fixedUpdateMxMAnimators.Count; ++i)
             {
-                MxMAnimator mxmAnimator = m_fixedUpdateMxMAnimators[m_fixedAnimatorIndex];
-                if (mxmAnimator && mxmAnimator.CanUpdate)
+                int thisIndex = (startIndex + i) % m_fixedUpdateMxMAnimators.Count;
+                
+                MxMAnimator mxmAnimator = m_fixedUpdateMxMAnimators[thisIndex];
+                if (mxmAnimator)
                 {
-#if UNITY_2019_1_OR_NEWER                    
-                    mxmAnimator.CacheRiggingIntegration();
-#endif                 
-                    mxmAnimator.MxMUpdate_Phase1(Time.fixedDeltaTime);
+                    if ( mxmAnimator.CanUpdate)
+                    {
+#if UNITY_2019_1_OR_NEWER
+                        mxmAnimator.CacheRiggingIntegration();
+#endif
+                        mxmAnimator.MxMUpdate_Phase1(Time.fixedDeltaTime);
+                    }
+                }
+                else
+                {
+                    m_fixedUpdateMxMAnimators.RemoveAt(thisIndex);
+                    --i;
                 }
             }
             
@@ -121,16 +165,22 @@ namespace MxM
         {
             foreach (MxMAnimator mxmAnimator in m_mxmAnimators)
             {
-                mxmAnimator.MxMLateUpdate();
+                if (mxmAnimator && mxmAnimator.CanUpdate)
+                {
+                        mxmAnimator.MxMLateUpdate();
+                }
             }
 
             foreach (MxMAnimator mxmAnimator in m_fixedUpdateMxMAnimators)
             {
-                mxmAnimator.MxMLateUpdate();
+                if (mxmAnimator && mxmAnimator.CanUpdate)
+                {
+                    mxmAnimator.MxMLateUpdate();
+                }
             }
-
-
+            
             m_searchesThisFrame = 0;
+            
         }
 
         public void RegisterMxMAnimator(MxMAnimator a_mxmAnimator)
@@ -138,7 +188,11 @@ namespace MxM
             if (!a_mxmAnimator)
                 return;
 
+#if UNITY_6000_1_OR_NEWER
             if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.Fixed)
+#else
+            if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.AnimatePhysics)
+#endif
             {
                 m_fixedUpdateMxMAnimators.Add(a_mxmAnimator);
             }
@@ -153,13 +207,19 @@ namespace MxM
             if (!a_mxmAnimator)
                 return;
             
+#if UNITY_6000_1_OR_NEWER
             if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.Fixed)
+#else
+            if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.AnimatePhysics)
+#endif
             {
                 m_fixedUpdateMxMAnimators.Remove(a_mxmAnimator);
+                m_fixedAnimatorIndex = Mathf.Clamp(m_fixedAnimatorIndex, 0, Mathf.Max(0, m_fixedUpdateMxMAnimators.Count - 1));
             }
             else
             {
                 m_mxmAnimators.Remove(a_mxmAnimator);
+                m_animatorIndex = Mathf.Clamp(m_animatorIndex, 0, Mathf.Max(0, m_mxmAnimators.Count-1));
             }
         }
 
@@ -167,17 +227,29 @@ namespace MxM
         {
             if (!a_mxmAnimator)
                 return false;
-
-            if (a_forceSearch                                       //Force Search If Requested
-                || a_mxmAnimator.PriorityUpdate                     //Force Search If Priority Animator
-                || m_searchesThisFrame < m_maxSearchesPerFrame      //Allow Search If max has not been reached
-                || a_searchDelay > Mathf.Min(m_maxAllowableDelay, a_mxmAnimator.MaxUpdateDelay)) //Allow search if max delay has been exceeded
+            
+            if (a_forceSearch //Force Search If Requested
+                || a_mxmAnimator.PriorityUpdate //Force Search If Priority Animator
+                || m_searchesThisFrame < m_maxSearchesPerFrame //Allow Search If max has not been reached
+                || a_searchDelay > Mathf.Min(m_maxAllowableDelay,a_mxmAnimator.MaxUpdateDelay)) //Allow search if max delay has been exceeded
             {
-                IncrementAnimatorIndex();
+    #if UNITY_6000_1_OR_NEWER
+            if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.Fixed)
+#else
+            if (a_mxmAnimator.UpdateMode == AnimatorUpdateMode.AnimatePhysics)
+#endif
+                {
+                    IncrementFixedUpdateAnimatorIndex();
+                }
+                else
+                {
+                    IncrementAnimatorIndex();
+                }
+                
                 ++m_searchesThisFrame;
                 return true;
             }
-
+            
             return false;
         }
     }

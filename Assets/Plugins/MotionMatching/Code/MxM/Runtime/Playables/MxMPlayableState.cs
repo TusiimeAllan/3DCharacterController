@@ -1,11 +1,4 @@
-﻿// ================================================================================================
-// File: MxMPlayableState.cs
-// 
-// Authors:  Kenneth Claassen
-// Date:     2019-10-10: Created this file.
-// 
-//     Contains a part of the 'MxM' namespace for 'Unity Engine'.
-// ================================================================================================
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
 
 using UnityEngine.Playables;
 using UnityEngine.Animations;
@@ -39,6 +32,7 @@ namespace MxM
         public float DecayAge;
         public EBlendStatus BlendStatus;
         public int AnimDataId;
+        public float AnimSpeedMod;
 
         //float Length { get; }
         public float Time
@@ -93,6 +87,7 @@ namespace MxM
             AnimType = EMxMAnimtype.Clip;
             AnimId = -1;
             AnimDataId = 0;
+            AnimSpeedMod = 1f;
 
             StartPoseId = -1;
             StartTime = 0f;
@@ -120,8 +115,8 @@ namespace MxM
                 int inputCount = a_playable.GetInputCount();
                 for (int i = 0; i < inputCount; ++i)
                 {
-                    Playable nextedPlayable = a_playable.GetInput(i);
-                    SetTimeRecursive(ref nextedPlayable, a_time);
+                    Playable nestedPlayable = a_playable.GetInput(i);
+                    SetTimeRecursive(ref nestedPlayable, a_time);
                 }
             }
         }
@@ -134,7 +129,7 @@ namespace MxM
         *  @param [float] a_startAge - Start the pose with an age (i.e. a time offset)
         *         
         *********************************************************************************************/
-        public void SetAsChosenWithPose(ref PoseData a_pose, float a_startAge = 0f)
+        public void SetAsChosenWithPose(ref PoseData a_pose, float a_speedMod, float a_startAge)
         {
             HighestWeight = Weight = 0f; //This may be wrong, start blend weight of 0?
             AnimType = a_pose.AnimType;
@@ -144,6 +139,7 @@ namespace MxM
             Age = a_startAge;
             DecayAge = 0f;
             BlendStatus = EBlendStatus.Chosen;
+            AnimSpeedMod = a_speedMod;
         }
         
         //============================================================================================
@@ -155,7 +151,7 @@ namespace MxM
         *  @param [float] a_startAge - Start the pose with an age (i.e. a time offset)
         *
         *********************************************************************************************/
-        public void SetAsChosenWithPoseNoBlend(ref PoseData a_pose, float a_startAge = 0f)
+        public void SetAsChosenWithPoseNoBlend(ref PoseData a_pose, float a_speedMod, float a_startAge)
         {
             HighestWeight = Weight = 1.0f;
             AnimType = a_pose.AnimType;
@@ -165,6 +161,7 @@ namespace MxM
             Age = a_startAge;
             DecayAge = 0f;
             BlendStatus = EBlendStatus.Dominant;
+            AnimSpeedMod = a_speedMod;
         }
 
     }//End of struct: MxMPlayableState

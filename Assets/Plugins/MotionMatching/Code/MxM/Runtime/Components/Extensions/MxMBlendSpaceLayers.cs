@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
+
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Playables;
@@ -40,6 +42,11 @@ namespace MxM
 
         private void OnDestroy()
         {
+            if (m_blendSpaceStates == null)
+            {
+                return;
+            }
+            
             foreach(KeyValuePair<MxMBlendSpace, MxMBlendSpaceState> pair in m_blendSpaceStates)
             {
                 pair.Value.DisposeNativeData();

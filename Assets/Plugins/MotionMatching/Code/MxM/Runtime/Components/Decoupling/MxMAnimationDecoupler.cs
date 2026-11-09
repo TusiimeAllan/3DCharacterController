@@ -1,11 +1,5 @@
-﻿// ================================================================================================
-// File: MxMAnimationDecoupler.cs
-// 
-// Authors:  Kenneth Claassen
-// Date:     2019-08-27: Created this file.
-// 
-//     Contains a part of the 'MxM' namespace for 'Unity Engine'.
-// ================================================================================================
+﻿// Copyright © 2017-2024 Vault Break Studios Pty Ltd
+
 using UnityEngine;
 using UnityEngine.Events;
 using MxMGameplay;
@@ -106,10 +100,11 @@ namespace MxM
             Animator animator = GetComponentInChildren<Animator>();
             if(animator != null)
             {
-                if (animator.updateMode == AnimatorUpdateMode.Fixed)
-                    m_fixedUpdate = true;
-                else
-                    m_fixedUpdate = false;
+#if UNITY_6000_1_OR_NEWER
+                m_fixedUpdate = animator.updateMode == AnimatorUpdateMode.Fixed;
+#else
+                m_fixedUpdate = animator.updateMode == AnimatorUpdateMode.AnimatePhysics;
+#endif
             }
             else
             {
