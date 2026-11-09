@@ -72,6 +72,10 @@ namespace CharacterControllerSystem
         public bool IsJumping { get; private set; }
         public bool IsFreeFalling { get; private set; }
         public float VerticalVelocity => _verticalVelocity;
+        /// <summary>Fastest downward speed of the current or just-finished fall (m/s); held briefly after landing so animation can pick a landing.</summary>
+        public float FallSpeed { get; private set; }
+        [Tooltip("Seconds FallSpeed keeps the landing speed after touching down")]
+        public float LandingHoldTime = 0.35f;
 
         // player state
         private float _speed;
@@ -86,6 +90,8 @@ namespace CharacterControllerSystem
         private float _fallTimeoutDelta;
         private float _jumpBufferDelta;
         private float _coyoteDelta;
+        private float _landingHold;
+        private bool _wasAirborne;
 
         // animator parameter hashes
         private int _animSpeed;
@@ -94,6 +100,7 @@ namespace CharacterControllerSystem
         private int _animFreeFall;
         private int _animMotionSpeed;
         private int _animCrouch;
+        private int _animFallSpeed;
 
         private bool _hasAnimator;
 
@@ -149,6 +156,7 @@ namespace CharacterControllerSystem
             _animFreeFall = Animator.StringToHash("FreeFall");
             _animMotionSpeed = Animator.StringToHash("MotionSpeed");
             _animCrouch = Animator.StringToHash("Crouch");
+            _animFallSpeed = Animator.StringToHash("FallSpeed");
         }
 
         private void GroundedCheck()
@@ -277,10 +285,30 @@ namespace CharacterControllerSystem
                     _animator.SetBool(_animFreeFall, false);
                 }
 
+                // Keep the landing speed for a moment so animation can choose a soft land or a roll.
+                if (_wasAirborne)
+                {
+                    _wasAirborne = false;
+                    _landingHold = LandingHoldTime;
+                }
+                else if (_landingHold > 0f)
+                {
+                    _landingHold -= dt;
+                    if (_landingHold <= 0f) FallSpeed = 0f;
+                }
+
                 if (_verticalVelocity < 0.0f) _verticalVelocity = -2f;
             }
             else
             {
+                if (!_wasAirborne)
+                {
+                    _wasAirborne = true;
+                    _landingHold = 0f;
+                    FallSpeed = 0f;
+                }
+                FallSpeed = Mathf.Max(FallSpeed, -_verticalVelocity);
+
                 if (_coyoteDelta > 0f) _coyoteDelta -= dt;
 
                 if (_fallTimeoutDelta >= 0.0f) _fallTimeoutDelta -= dt;
@@ -302,6 +330,8 @@ namespace CharacterControllerSystem
                 IsJumping = true;
                 if (_hasAnimator) _animator.SetBool(_animJump, true);
             }
+
+            if (_hasAnimator) _animator.SetFloat(_animFallSpeed, FallSpeed);
 
             // Falling velocity is negative, so clamp against the negative terminal velocity.
             _verticalVelocity = Mathf.Max(_verticalVelocity + Gravity * dt, -_terminalVelocity);

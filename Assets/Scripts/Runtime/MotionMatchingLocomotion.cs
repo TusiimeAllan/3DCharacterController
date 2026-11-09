@@ -63,6 +63,11 @@ namespace CharacterControllerSystem
         private static readonly int JumpId = Animator.StringToHash("Jump");
         private static readonly int FreeFallId = Animator.StringToHash("FreeFall");
         private static readonly int CrouchId = Animator.StringToHash("Crouch");
+        private static readonly int FallSpeedId = Animator.StringToHash("FallSpeed");
+        private const string LandingTag = "Landing";
+
+        /// <summary>True while the Animator Controller plays a landing or roll (states tagged "Landing").</summary>
+        public bool InLandingState { get; private set; }
 
         private AnimatorControllerPlayable _controllerLayer;
         private float _layerWeight = 1f;
@@ -122,8 +127,12 @@ namespace CharacterControllerSystem
             if (!ResolveControllerLayer()) return;
 
             // Hand jump, fall and crouch to our Animator Controller; ground locomotion to MxM.
+            // Landings and rolls finish on our controller before handing back, so they are not cut off.
+            InLandingState = _controllerLayer.GetCurrentAnimatorStateInfo(0).IsTag(LandingTag) ||
+                             (_controllerLayer.IsInTransition(0) &&
+                              _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching;
+                                 Controller.IsCrouching || InLandingState;
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
             _layerWeight = duration <= 0f ? target : Mathf.MoveTowards(_layerWeight, target, Time.deltaTime / duration);
@@ -135,6 +144,7 @@ namespace CharacterControllerSystem
             _controllerLayer.SetBool(JumpId, Controller.IsJumping);
             _controllerLayer.SetBool(FreeFallId, Controller.IsFreeFalling);
             _controllerLayer.SetBool(CrouchId, Controller.IsCrouching);
+            _controllerLayer.SetFloat(FallSpeedId, Controller.FallSpeed);
         }
 
         public void SetMode(bool useMotionMatching)

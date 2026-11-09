@@ -41,8 +41,10 @@ namespace CharacterControllerSystem.EditorTools
             importer.optimizeGameObjects = false;      // keep bones for sockets / IK
             importer.importNormals = ModelImporterNormals.Import;
 
-            // Base models (@T-Pose or the bare model) don't carry animation.
-            if (assetPath.Contains("@T-Pose") || !assetPath.Contains("@"))
+            // Base models (@T-Pose or the bare model) don't carry animation. Files under an
+            // Animations folder always do, even without '@' (e.g. the UAL animation library).
+            bool isAnimationLibrary = assetPath.Replace('\\', '/').Contains("/Animations/");
+            if (assetPath.Contains("@T-Pose") || (!assetPath.Contains("@") && !isAnimationLibrary))
                 importer.importAnimation = false;
         }
 

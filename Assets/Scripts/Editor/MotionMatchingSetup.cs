@@ -226,6 +226,16 @@ namespace CharacterControllerSystem.EditorTools
                 bridge.WalkProfile = AssetDatabase.LoadAssetAtPath<MxMInputProfile>(WalkProfile);
                 bridge.SprintProfile = AssetDatabase.LoadAssetAtPath<MxMInputProfile>(SprintProfile);
 
+                // Procedural foot grounding and look-at on Humanoid IK (needs the IK pass on every source).
+                var grounding = root.GetComponent<HumanoidGrounding>();
+                if (grounding == null) grounding = root.AddComponent<HumanoidGrounding>();
+                grounding.Controller = bridge.Controller;
+                grounding.GroundLayers = bridge.Controller.GroundLayers;
+                so.Update();
+                so.FindProperty("m_applyPlayableIK").boolValue = true;
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EnableIKPass(animator.runtimeAnimatorController as AnimatorController);
+
                 PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
                 Debug.Log($"{Tag} Player prefab set up for motion matching.");
             }
@@ -233,6 +243,16 @@ namespace CharacterControllerSystem.EditorTools
             {
                 PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        private static void EnableIKPass(AnimatorController controller)
+        {
+            if (controller == null) return;
+            var layers = controller.layers;
+            for (int i = 0; i < layers.Length; i++) layers[i].iKPass = true;
+            controller.layers = layers;
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
         }
 
         /// <summary>Nulls references copied from the demo prefab that point at objects outside our hierarchy.</summary>

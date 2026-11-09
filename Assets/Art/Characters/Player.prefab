@@ -49,6 +49,7 @@ GameObject:
   - component: {fileID: 5929075747165873922}
   - component: {fileID: 5163338868927937640}
   - component: {fileID: 5856110124234482876}
+  - component: {fileID: 2188630293081521149}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -394,6 +395,38 @@ MonoBehaviour:
   SprintBias: 6
   LayerFadeIn: 0.1
   LayerFadeOut: 0.25
+--- !u!114 &2188630293081521149
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d98c97059b0ea140b09f3225b44628c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.HumanoidGrounding
+  EnableGrounding: 1
+  EnableLookAt: 1
+  ToggleKey: 21
+  Controller: {fileID: 8766155822904003866}
+  CameraTransform: {fileID: 0}
+  GroundLayers:
+    serializedVersion: 2
+    m_Bits: 1
+  RayStartHeight: 0.5
+  MaxStepDown: 0.55
+  MaxFootAngle: 50
+  FootSmoothing: 18
+  MaxPelvisDrop: 0.45
+  PelvisSmoothing: 10
+  LookWeight: 0.8
+  BodyWeight: 0.15
+  HeadWeight: 0.7
+  EyesWeight: 1
+  LookClamp: 0.55
+  LookSmoothing: 6
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

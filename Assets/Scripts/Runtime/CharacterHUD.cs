@@ -216,6 +216,13 @@ namespace CharacterControllerSystem
                 e.IsOn = () => mm.UseMotionMatching;
                 _legend.Add(e);
             }
+            var grounding = FindAnyObjectByType<HumanoidGrounding>();
+            if (grounding != null && !pad)
+            {
+                var e = AddLegendEntry(grounding.ToggleKey.ToString(), "Grounding + look-at");
+                e.IsOn = () => grounding.Enabled;
+                _legend.Add(e);
+            }
         }
 
 #if ENABLE_INPUT_SYSTEM
