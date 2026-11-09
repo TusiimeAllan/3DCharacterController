@@ -59,6 +59,20 @@ namespace CharacterControllerSystem
         [Tooltip("Optional. Leave empty to run without animation.")]
         [SerializeField] private Animator _animator;
 
+        [Header("Animation Output")]
+        [Tooltip("Write Speed / Grounded / Jump / FreeFall / Crouch to the Animator. Turned off when another " +
+                 "component (e.g. motion matching) reads the state below and drives the animation instead.")]
+        public bool DriveAnimator = true;
+
+        // Movement state published for animation systems. The controller always owns movement.
+        public float TargetSpeed { get; private set; }
+        public float AnimationBlend => _animationBlend;
+        public float InputMagnitude { get; private set; }
+        public bool IsCrouching { get; private set; }
+        public bool IsJumping { get; private set; }
+        public bool IsFreeFalling { get; private set; }
+        public float VerticalVelocity => _verticalVelocity;
+
         // player state
         private float _speed;
         private float _animationBlend;
@@ -120,7 +134,7 @@ namespace CharacterControllerSystem
 
         private void Update()
         {
-            _hasAnimator = _animator != null;
+            _hasAnimator = _animator != null && DriveAnimator;
             GroundedCheck();
             JumpAndGravity();
             Crouch();
@@ -177,6 +191,7 @@ namespace CharacterControllerSystem
             _controller.height = Mathf.Lerp(_controller.height, targetHeight, Time.deltaTime * 12f);
             _controller.center = new Vector3(0f, _controller.height * 0.5f, 0f);
 
+            IsCrouching = wantsCrouch;
             if (_hasAnimator) _animator.SetBool(_animCrouch, wantsCrouch);
         }
 
@@ -186,11 +201,13 @@ namespace CharacterControllerSystem
             float targetSpeed = crouching ? CrouchSpeed : (_input.sprint ? SprintSpeed : MoveSpeed);
 
             if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+            TargetSpeed = targetSpeed;
 
             float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f,
                 _controller.velocity.z).magnitude;
             float speedOffset = 0.1f;
             float inputMagnitude = _input.move.magnitude > 1f ? 1f : _input.move.magnitude;
+            InputMagnitude = inputMagnitude;
 
             if (currentHorizontalSpeed < targetSpeed - speedOffset ||
                 currentHorizontalSpeed > targetSpeed + speedOffset)
@@ -252,6 +269,8 @@ namespace CharacterControllerSystem
                 _coyoteDelta = CoyoteTime;
                 _fallTimeoutDelta = FallTimeout;
 
+                IsJumping = false;
+                IsFreeFalling = false;
                 if (_hasAnimator)
                 {
                     _animator.SetBool(_animJump, false);
@@ -265,7 +284,11 @@ namespace CharacterControllerSystem
                 if (_coyoteDelta > 0f) _coyoteDelta -= dt;
 
                 if (_fallTimeoutDelta >= 0.0f) _fallTimeoutDelta -= dt;
-                else if (_hasAnimator) _animator.SetBool(_animFreeFall, true);
+                else
+                {
+                    IsFreeFalling = true;
+                    if (_hasAnimator) _animator.SetBool(_animFreeFall, true);
+                }
             }
 
             bool canJump = _coyoteDelta > 0f && _jumpBufferDelta > 0f && _jumpTimeoutDelta <= 0f &&
@@ -276,6 +299,7 @@ namespace CharacterControllerSystem
                 _jumpBufferDelta = 0f;
                 _coyoteDelta = 0f;
                 _jumpTimeoutDelta = JumpTimeout;
+                IsJumping = true;
                 if (_hasAnimator) _animator.SetBool(_animJump, true);
             }
 

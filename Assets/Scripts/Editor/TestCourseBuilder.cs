@@ -335,7 +335,6 @@ namespace CharacterControllerSystem.EditorTools
                 go.transform.SetParent(g, false);
                 go.transform.position = centre;
                 go.AddComponent<BoxCollider>().size = size;
-                GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.NavigationStatic);
             }
 
             // Walls sit just outside the ground so the full surface stays walkable.
@@ -430,7 +429,7 @@ namespace CharacterControllerSystem.EditorTools
             var mc = pb.gameObject.AddComponent<MeshCollider>();
             mc.sharedMesh = pb.GetComponent<MeshFilter>().sharedMesh;
             mc.convex = convex;
-            GameObjectUtility.SetStaticEditorFlags(pb.gameObject, convex ? 0 : StaticEditorFlags.BatchingStatic | StaticEditorFlags.NavigationStatic);
+            GameObjectUtility.SetStaticEditorFlags(pb.gameObject, convex ? 0 : StaticEditorFlags.BatchingStatic);
         }
 
         private static void Mover(Transform parent, string name, Vector3 centre, Vector3 size, Vector3 offset,

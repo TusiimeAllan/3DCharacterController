@@ -70,7 +70,7 @@ namespace CharacterControllerSystem
 #if ENABLE_INPUT_SYSTEM
             public InputAction Action;
 #endif
-            public bool IsCrouch;
+            public System.Func<bool> IsOn; // toggles (crouch, motion matching) stay lit while on
         }
 
         private readonly List<UnityEngine.UI.Button> _characterButtons = new List<UnityEngine.UI.Button>();
@@ -202,13 +202,20 @@ namespace CharacterControllerSystem
                 if (string.IsNullOrEmpty(key)) continue;
                 var e = AddLegendEntry(key, la.Label);
                 e.Action = action;
-                e.IsCrouch = la.Action == "Crouch";
+                if (la.Action == "Crouch") e.IsOn = () => Inputs != null && Inputs.crouch;
                 _legend.Add(e);
             }
 #endif
             int count = Switcher != null ? Mathf.Min(Switcher.Characters.Count, 9) : 0;
             if (count > 1) _legend.Add(AddLegendEntry(pad ? "LB / RB" : $"Tab / 1-{count}", "Change character"));
             if (!pad) _legend.Add(AddLegendEntry("Esc", "Free cursor (click to lock)"));
+            var mm = FindAnyObjectByType<MotionMatchingLocomotion>();
+            if (mm != null && !pad)
+            {
+                var e = AddLegendEntry(mm.ToggleKey.ToString(), "Motion matching");
+                e.IsOn = () => mm.UseMotionMatching;
+                _legend.Add(e);
+            }
         }
 
 #if ENABLE_INPUT_SYSTEM
@@ -254,7 +261,7 @@ namespace CharacterControllerSystem
             {
                 bool on = false;
 #if ENABLE_INPUT_SYSTEM
-                if (e.IsCrouch && Inputs != null) on = Inputs.crouch;
+                if (e.IsOn != null) on = e.IsOn();
                 else if (e.Action != null) on = e.Action.IsPressed();
 #endif
                 if (e.KeyBg != null) e.KeyBg.color = on ? AccentColor : IdleKeyColor;

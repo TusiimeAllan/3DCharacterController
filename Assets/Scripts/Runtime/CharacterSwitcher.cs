@@ -37,6 +37,9 @@ namespace CharacterControllerSystem
         [Tooltip("Tab / 1-9 / Gamepad LB-RB switch characters while playing")]
         public bool EnableHotkeys = true;
         public bool ShowHint = true;
+        [Tooltip("Carry the Animator Controller state over on a switch. Turned off when a playable graph " +
+                 "(e.g. motion matching) drives the Animator and keeps its own pose.")]
+        public bool PreserveAnimatorState = true;
 
         public event Action<int> CharacterChanged;
 
@@ -122,7 +125,7 @@ namespace CharacterControllerSystem
             var entry = Characters[index];
             if (entry == null || entry.Root == null) return;
 
-            bool canPreserve = preserveAnimation && _appliedIndex >= 0 &&
+            bool canPreserve = preserveAnimation && PreserveAnimatorState && _appliedIndex >= 0 &&
                                _animator.isActiveAndEnabled && _animator.runtimeAnimatorController != null;
             LayerSnapshot[] layers = canPreserve ? CaptureLayers() : null;
             AnimatorControllerParameter[] parameters = canPreserve ? _animator.parameters : null;
@@ -139,6 +142,7 @@ namespace CharacterControllerSystem
 
             if (Application.isPlaying && (avatarChanged || canPreserve))
             {
+                // Rebind binds the new skeleton; a playable graph on this Animator keeps running through it.
                 _animator.Rebind();
                 if (canPreserve)
                 {
