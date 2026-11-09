@@ -505,6 +505,9 @@ MonoBehaviour:
   MaxLowDrop: 1.5
   MaxDrop: 3.2
   Cooldown: 0.3
+  EnableSlide: 1
+  MinSlideSpeed: 4.5
+  SlideHeight: 1
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

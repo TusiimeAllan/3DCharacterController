@@ -153,6 +153,7 @@ namespace CharacterControllerSystem
 
         private const float _threshold = 0.01f;
         private readonly Collider[] _groundHits = new Collider[8];
+        private readonly RaycastHit[] _headroomHits = new RaycastHit[8];
 
         private void Reset() => AutoAssignReferences();
 
@@ -249,19 +250,13 @@ namespace CharacterControllerSystem
             if (MovementLocked) _input.crouch = IsCrouching; // keep the current stance while locked
             bool wantsCrouch = _input.crouch && Grounded;
 
-            // Block stand-up if there is no headroom.
-            if (!wantsCrouch && _controller.height < StandingHeight - 0.01f)
-            {
-                Vector3 start = transform.position + Vector3.up * CrouchingHeight;
-                if (Physics.SphereCast(start, GroundedRadius, Vector3.up, out _,
-                        StandingHeight - CrouchingHeight, GroundLayers, QueryTriggerInteraction.Ignore))
-                {
-                    wantsCrouch = true;
-                    _input.crouch = true;
-                }
-            }
+            // Under a roof lower than standing height: stay crouched while it lasts (the crouch toggle is left
+            // alone, so the character stands up again on leaving), and shrink further if even crouching won't fit.
+            float clearance = Headroom();
+            if (!wantsCrouch && clearance < StandingHeight) wantsCrouch = true;
+            float crouchHeight = Mathf.Clamp(clearance - 0.05f, 2f * _controller.radius + 0.1f, CrouchingHeight);
 
-            float targetHeight = wantsCrouch ? CrouchingHeight : StandingHeight;
+            float targetHeight = wantsCrouch ? crouchHeight : StandingHeight;
             _controller.height = Mathf.Lerp(_controller.height, targetHeight, Time.deltaTime * 12f);
             _controller.center = new Vector3(0f, _controller.height * 0.5f, 0f);
 
@@ -269,10 +264,28 @@ namespace CharacterControllerSystem
             if (_hasAnimator) _animator.SetBool(_animCrouch, wantsCrouch);
         }
 
+        /// <summary>Free height above the feet, up to standing height (float.MaxValue when nothing is above).</summary>
+        private float Headroom()
+        {
+            float r = _controller.radius * 0.9f;
+            float lift = _controller.radius + 0.05f;
+            Vector3 start = transform.position + Vector3.up * lift;
+            int hits = Physics.SphereCastNonAlloc(start, r, Vector3.up, _headroomHits, StandingHeight - lift,
+                GroundLayers, QueryTriggerInteraction.Ignore);
+            float nearest = float.MaxValue;
+            for (int i = 0; i < hits; i++)
+            {
+                var h = _headroomHits[i];
+                if (h.transform.IsChildOf(transform) || h.distance <= 0f) continue; // ourselves, or started inside
+                nearest = Mathf.Min(nearest, lift + h.distance + r);
+            }
+            return nearest;
+        }
+
         private void Move()
         {
             Vector2 move = MovementLocked ? Vector2.zero : _input.move;
-            bool crouching = _input.crouch && Grounded;
+            bool crouching = IsCrouching; // includes being kept crouched under a low roof
             // No crouch strafe clips: crouching keeps the normal turn-to-move behaviour.
             IsStrafing = AllowStrafe && _input.strafe && !MovementLocked && !crouching && CameraTransform != null;
 
@@ -452,7 +465,7 @@ namespace CharacterControllerSystem
             }
 
             bool canJump = _coyoteDelta > 0f && _jumpBufferDelta > 0f && _jumpTimeoutDelta <= 0f &&
-                           !_input.crouch; // no jumping while crouched
+                           !_input.crouch && !IsCrouching; // no jumping while crouched
             if (canJump)
             {
                 _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);

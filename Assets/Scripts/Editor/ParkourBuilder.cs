@@ -41,6 +41,8 @@ namespace CharacterControllerSystem.EditorTools
             (Events + "VaultOff/Run_JumpDownLow_Roll_Run_Mirror.anim", ParkourKind.DropLow),
             (Events + "VaultOff/Run_JumpDownHigh_Roll_Run.anim", ParkourKind.DropHigh),
             (Events + "VaultOff/Run_JumpDownHigh_Roll_Run_Mirror.anim", ParkourKind.DropHigh),
+            (Events + "RunSlide_ToRight_1.anim", ParkourKind.Slide),
+            (Events + "RunSlide_ToRight_2.anim", ParkourKind.Slide),
         };
 
         [MenuItem("Tools/Character Controller/Add Parkour (Vault, Climb, Drop)")]
@@ -154,6 +156,20 @@ namespace CharacterControllerSystem.EditorTools
                     end = Mathf.Min(n - 1, settled + Frames(0.25f));
                     contact = Mathf.Max(start, fall - Frames(0.1f));
                     height = y0 - final;
+                    break;
+                }
+                case ParkourKind.Slide:
+                {
+                    int dip = FirstIndex(pos, 0, p => p.y < y0 - 0.1f);
+                    if (dip < 0) return null;
+                    int low = dip;
+                    for (int i = dip; i < n; i++) if (pos[i].y < pos[low].y) low = i;
+                    int up = FirstIndex(pos, low, p => p.y >= y0 - 0.05f);
+                    if (up < 0) up = n - 1;
+                    start = Mathf.Max(0, dip - Frames(0.2f));
+                    end = Mathf.Min(n - 1, up + Frames(0.15f));
+                    contact = start;
+                    height = y0 - pos[low].y;
                     break;
                 }
                 default: // Hurdle

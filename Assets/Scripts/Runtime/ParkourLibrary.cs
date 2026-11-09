@@ -16,6 +16,8 @@ namespace CharacterControllerSystem
         DropLow,
         /// <summary>Jump down from a ledge of about 1.5 to 3.2 m and roll.</summary>
         DropHigh,
+        /// <summary>Slide along the ground (sprint, then crouch).</summary>
+        Slide,
     }
 
     /// <summary>

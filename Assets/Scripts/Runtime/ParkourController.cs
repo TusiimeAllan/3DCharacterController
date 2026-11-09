@@ -17,7 +17,9 @@ namespace CharacterControllerSystem
     /// in charge: the capsule follows the clip's own root path, stretched to the measured obstacle, so hands
     /// and feet meet the real ledge whatever its exact size.
     /// </summary>
-    [DefaultExecutionOrder(80)] // before CharacterActions and motion matching read the controller state
+    // Before ThirdPersonController: a move that starts this frame takes over before the controller reacts to
+    // the same input (a crouch press would otherwise brake the sprint a slide needs).
+    [DefaultExecutionOrder(-10)]
     [DisallowMultipleComponent]
     public class ParkourController : MonoBehaviour
     {
@@ -49,6 +51,13 @@ namespace CharacterControllerSystem
         [Tooltip("Seconds before another move can start")]
         public float Cooldown = 0.3f;
 
+        [Header("Slide (sprint, then crouch)")]
+        public bool EnableSlide = true;
+        [Tooltip("Slowest speed a crouch press turns into a slide (m/s)")]
+        public float MinSlideSpeed = 4.5f;
+        [Tooltip("Capsule height while sliding, so it fits under low gaps")]
+        public float SlideHeight = 1.0f;
+
         public bool IsActive { get; private set; }
         public ParkourKind? CurrentKind => IsActive ? _move.Kind : (ParkourKind?)null;
         public event System.Action<bool> ToggledChanged;
@@ -68,6 +77,9 @@ namespace CharacterControllerSystem
         private Quaternion _startRotation;
         private float _forwardScale, _heightScale, _endY, _elapsed, _cooldown;
         private bool _paramSet;
+        private bool _collide;      // move with collisions (slide) instead of placing the capsule (vaults)
+        private bool _previousCrouch;
+        private float _stepOffset;
 
         private void Awake()
         {
@@ -98,6 +110,9 @@ namespace CharacterControllerSystem
                 return;
             }
             if (_cooldown > 0f) _cooldown -= Time.deltaTime;
+            bool crouchPressed = _inputs != null && _inputs.crouch && !_previousCrouch;
+            _previousCrouch = _inputs != null && _inputs.crouch;
+            if (crouchPressed && TrySlide()) return;
             if (CanStart()) TryStart();
         }
 
@@ -230,6 +245,48 @@ namespace CharacterControllerSystem
             Begin(kind, pos, fwd, edge, total, groundY);
         }
 
+        private bool TrySlide()
+        {
+            if (!EnableParkour || !EnableSlide || Library == null || _cooldown > 0f || !_inputs.sprint) return false;
+            if (Controller == null || !Controller.Grounded || Controller.MovementLocked || Controller.ExternallyDriven ||
+                Controller.IsStrafing || Controller.IsJumping || _cc == null || !_cc.enabled) return false;
+            Vector3 v = _cc.velocity;
+            v.y = 0f;
+            if (v.magnitude < MinSlideSpeed) return false;
+
+            var options = new List<int>();
+            for (int i = 0; i < Library.Moves.Count; i++)
+                if (Library.Moves[i].Kind == ParkourKind.Slide && Library.Moves[i].Path != null && Library.Moves[i].Path.Length > 1) options.Add(i);
+            if (options.Count == 0) return false;
+            int index = options[Random.Range(0, options.Count)];
+            var move = Library.Moves[index];
+
+            // Keep the speed we arrive with: stretch the recorded slide to it.
+            float clipSpeed = move.Sample(1f).x / Mathf.Max(0.1f, move.Duration);
+            _forwardScale = Mathf.Clamp(v.magnitude / Mathf.Max(0.5f, clipSpeed), 0.7f, 1.4f);
+            _heightScale = 1f;
+            _move = move;
+            _origin = transform.position;
+            _forward = Flat(v);
+            _startRotation = transform.rotation;
+            _endY = _origin.y;
+            _elapsed = 0f;
+            _collide = true;
+            IsActive = true;
+            _paramSet = true;
+            SetParkourParam(index + 1);
+
+            _inputs.crouch = false; // the slide is the crouch; stand up after unless there is no headroom
+            _previousCrouch = false;
+            Controller.ExternallyDriven = true;
+            _cc.height = SlideHeight;
+            _cc.center = new Vector3(0f, SlideHeight * 0.5f, 0f);
+            // The controller lifts by its step offset while testing a move; keep that from catching low roofs.
+            _stepOffset = _cc.stepOffset;
+            _cc.stepOffset = Mathf.Min(_stepOffset, 0.1f);
+            return true;
+        }
+
         // ---------------------------------------------------------------- execution
 
         private void Begin(ParkourKind kind, Vector3 pos, Vector3 face, float contactDistance, float height, float endY)
@@ -253,6 +310,7 @@ namespace CharacterControllerSystem
             _startRotation = transform.rotation;
             _endY = endY;
             _elapsed = 0f;
+            _collide = false;
             IsActive = true;
             _paramSet = true;
             SetParkourParam(index + 1);
@@ -281,7 +339,24 @@ namespace CharacterControllerSystem
             y = Mathf.Max(y, Mathf.Min(_origin.y, _endY));
             Vector3 position = _origin + _forward * (s.x * _forwardScale);
             position.y = y;
-            transform.position = position;
+            if (_collide)
+            {
+                // Slide: move with collisions, hugging the ground; stop if something blocks the way.
+                Vector3 delta = position - transform.position;
+                delta.y = -3f * dt;
+                Vector3 before = transform.position;
+                _cc.Move(delta);
+                // Blocked (a wall, not just brushing a low roof): end the slide there.
+                Vector3 moved = transform.position - before;
+                moved.y = 0f;
+                delta.y = 0f;
+                if (p < 0.85f && delta.magnitude > 0.01f && moved.magnitude < delta.magnitude * 0.3f)
+                {
+                    Finish();
+                    return;
+                }
+            }
+            else transform.position = position;
             transform.rotation = Quaternion.Slerp(_startRotation, Quaternion.LookRotation(_forward),
                 Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(p / 0.15f)));
 
@@ -294,7 +369,12 @@ namespace CharacterControllerSystem
             _cooldown = Cooldown;
             if (_paramSet) SetParkourParam(0);
             _paramSet = false;
-            if (_cc != null) _cc.enabled = true;
+            if (_cc != null)
+            {
+                _cc.enabled = true;
+                if (_collide) _cc.stepOffset = _stepOffset;
+            }
+            _collide = false;
             Physics.SyncTransforms();
             if (Controller != null) Controller.ExternallyDriven = false;
         }

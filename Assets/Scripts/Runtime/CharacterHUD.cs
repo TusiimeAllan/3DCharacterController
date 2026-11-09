@@ -251,7 +251,7 @@ namespace CharacterControllerSystem
             var parkour = FindAnyObjectByType<ParkourController>();
             if (parkour != null && !pad)
             {
-                var e = AddLegendEntry(parkour.ToggleKey.ToString(), "Parkour: run at obstacles");
+                var e = AddLegendEntry(parkour.ToggleKey.ToString(), "Parkour: run at obstacles, sprint + crouch slides");
                 e.IsOn = () => parkour.EnableParkour;
                 _legend.Add(e);
             }
