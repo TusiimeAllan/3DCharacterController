@@ -57,12 +57,18 @@ namespace CharacterControllerSystem
                 cursorLocked = false;
                 SetCursorState(false);
             }
-            else if (!cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            else if (!cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame &&
+                     !IsPointerOverUI())
             {
                 cursorLocked = true;
                 SetCursorState(true);
             }
         }
+
+        // Clicking a HUD button must not re-lock the cursor.
+        private static bool IsPointerOverUI() =>
+            UnityEngine.EventSystems.EventSystem.current != null &&
+            UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject();
 
         public void OnMove(InputValue value) => MoveInput(value.Get<Vector2>());
         public void OnLook(InputValue value)

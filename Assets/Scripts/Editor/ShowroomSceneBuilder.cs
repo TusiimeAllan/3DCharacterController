@@ -16,7 +16,7 @@ namespace CharacterControllerSystem.EditorTools
     public static class ShowroomSceneBuilder
     {
         private const string Tag = "[ShowroomSceneBuilder]";
-        private const string MainScenePath = "Assets/Scenes/Main.unity";
+        private const string MainScenePath = "Assets/Scenes/OpenWorld.unity";
         private const string ScenePath = "Assets/Scenes/Showroom.unity";
         private const string ArtRoot = "Assets/Art/Showroom";
         private const string VolumeProfilePath = "Assets/Settings/ShowroomVolumeProfile.asset";
