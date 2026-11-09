@@ -200,6 +200,8 @@ MonoBehaviour:
   AllowStrafe: 1
   StrafeSprintSpeed: 4.2
   StrafeBackwardScale: 0.7
+  MaxTurnSpeed: 540
+  StrafeMaxTurnSpeed: 720
   StrafeRotationSmoothTime: 0.05
   StrafeTurnInPlace: 1
   StrafeTurnThreshold: 70
@@ -427,6 +429,7 @@ MonoBehaviour:
   StrafeCalibration: Strafe
   LayerFadeIn: 0.1
   LayerFadeOut: 0.25
+  StrideMatchLimits: {x: 0.8, y: 1.4}
 --- !u!114 &2188630293081521149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -453,6 +456,14 @@ MonoBehaviour:
   FootSmoothing: 18
   MaxPelvisDrop: 0.45
   PelvisSmoothing: 10
+  EnableFootLocking: 1
+  PlantHeight: 0.04
+  PlantSpeed: 1.2
+  ReleaseHeight: 0.07
+  MaxLockDrift: 0.3
+  StepImpact: 0.35
+  ImpactSpring: 260
+  ImpactDamping: 0.55
   UphillLean: 0.5
   DownhillLean: 0.3
   MaxLean: 15
@@ -520,6 +531,9 @@ MonoBehaviour:
   MaxLowDrop: 1.5
   MaxDrop: 3.2
   Cooldown: 0.3
+  TriggerDistance: 0.9
+  DropRunSpeed: 3
+  DropTriggerDistance: 0.7
   EnableSlide: 1
   MinSlideSpeed: 4.5
   SlideHeight: 1

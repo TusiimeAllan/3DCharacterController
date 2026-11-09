@@ -1485,6 +1485,17 @@ MonoBehaviour:
   CollisionRadius: 0.2
   MinDistance: 0.5
   RecoverSpeed: 6
+  KeepPlayerVisible: 1
+  MaxAutoYaw: 80
+  MaxAutoPitch: 35
+  AutoSmoothTime: 0.25
+  ReturnDelay: 0.6
+  SightRadius: 0.06
+  VerticalLag: 0.3
+  VisibilityPullSpeed: 2.5
+  OcclusionPullSpeed: 6
+  GroundClearance: 0.35
+  MaxGroundLift: 30
 --- !u!1 &336881693
 GameObject:
   m_ObjectHideFlags: 0
@@ -1863,14 +1874,17 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7500574589923400414, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 500991572}
   m_SourcePrefab: {fileID: 100100000, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
 --- !u!114 &500991566 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6784669559435407594, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
   m_PrefabInstance: {fileID: 500991565}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 500991571}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: da17cae6efe5ba244ac3b800e8574081, type: 3}
@@ -1886,7 +1900,7 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8954366063464921596, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
   m_PrefabInstance: {fileID: 500991565}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 500991571}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 62899f850307741f2a39c98a8b639597, type: 3}
@@ -1897,12 +1911,50 @@ MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 6188695867054075681, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
   m_PrefabInstance: {fileID: 500991565}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
+  m_GameObject: {fileID: 500991571}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 372e572fd15bf7d4693ac894f2c6fff5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.CharacterSwitcher
+--- !u!114 &500991570 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8766155822904003866, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
+  m_PrefabInstance: {fileID: 500991565}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 500991571}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5f583f934a881b14da677be3658c153a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.ThirdPersonController
+--- !u!1 &500991571 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7500574589923400414, guid: 0ce053b2b650d3f4baa94e129bc18f6a, type: 3}
+  m_PrefabInstance: {fileID: 500991565}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &500991572
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 500991571}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4221df86b8611340bc083c516614db7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.BikeRider
+  Controller: {fileID: 500991570}
+  Inputs: {fileID: 500991566}
+  HipOffset: 0.06
+  Lean: {x: 18, y: 26, z: 4}
+  ArmReach: 0.93
+  BodySteerFollow: 0.6
+  SteerSpeed: 120
+  SteerRange: 0.6
+  FingerCurl: {x: 70, y: 80, z: 50}
+  ThumbCurl: {x: 15, y: 25, z: 25}
 --- !u!1 &532088919
 GameObject:
   m_ObjectHideFlags: 0
@@ -6681,6 +6733,68 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1877045954}
   m_CullTransparentMesh: 1
+--- !u!1 &1943059126
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1943059128}
+  - component: {fileID: 1943059127}
+  m_Layer: 0
+  m_Name: VehicleDisplay
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1943059127
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1943059126}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60f90329982db83498b486e801d55b73, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.BikeShowroom
+  Vehicles:
+  - Name: Sport Motorbike
+    Prefab: {fileID: 4864176553850709765, guid: ffb0898d47fd30547b3d91d24d82c5b8, type: 3}
+  - Name: Vespa Scooter
+    Prefab: {fileID: 1332001217382916226, guid: 0fdf67316b3cf8840a62a7c3281890ba, type: 3}
+  - Name: Downhill MTB
+    Prefab: {fileID: 5618501542641682806, guid: 80943386411352345add4f5eb798bbea, type: 3}
+  - Name: BMX
+    Prefab: {fileID: 7450146124488552743, guid: 9980717cf57eaea4c973e01082c5b33f, type: 3}
+  - Name: Kids Bike
+    Prefab: {fileID: 4947667694858492134, guid: 65508f6e72f02c54b84d227b33f44cac, type: 3}
+  Rider: {fileID: 500991572}
+  Hud: {fileID: 803146607}
+  _activeIndex: 0
+  RideOnStart: 1
+  MountDistance: 2
+  StartCameraYaw: 135
+  NextKey: 16
+--- !u!4 &1943059128
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1943059126}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0.38268346, z: 0, w: 0.9238795}
+  m_LocalPosition: {x: 0, y: 0, z: 0.5}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1980197632
 GameObject:
   m_ObjectHideFlags: 0
@@ -7055,3 +7169,4 @@ SceneRoots:
   - {fileID: 219759205}
   - {fileID: 256012886}
   - {fileID: 803146611}
+  - {fileID: 1943059128}

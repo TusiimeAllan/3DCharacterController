@@ -1,0 +1,168 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &7756700201823865974
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      propertyPath: m_Name
+      value: BMX_Bike
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 6441700143225078570}
+  m_SourcePrefab: {fileID: 100100000, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+--- !u!4 &1497842483870031211 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -41602835600223971, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2204520756741863295 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 8447998971573140233, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2269520512902163911 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -802870686357429839, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &2773010357659308415 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5611172354444664073, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &3386228856569061908 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4997615186661633634, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &3798265413701813787 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -2372425062915454355, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &5217150546860264162 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -6646645117023238508, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &5483020596313796099 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2860576939398570613, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &5646770795471466621 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -6487424669710681077, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &5897487527685792194 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4214595287876611508, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &5960051349356639195 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -5110725056752451667, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &7450146124488552743 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &6441700143225078570
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7450146124488552743}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d07873b1e00e43046b05d196f89833dd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Transport.RideableVehicle
+  steerAngle: 0
+  wheelRotation: 0
+  crankRotation: 0
+  autoFromMotion: 1
+  kind: 0
+  frontWheelRadius: 0.26032364
+  rearWheelRadius: 0.26
+  crankPerWheelTurn: 0.36
+  maxSteerAngle: 45
+  rakeDegrees: 16
+  seatHeight: 0.6924845
+  steer: {fileID: 3386228856569061908}
+  wheelFront: {fileID: 1497842483870031211}
+  wheelRear: {fileID: 2204520756741863295}
+  crank: {fileID: 5960051349356639195}
+  pedalL: {fileID: 2269520512902163911}
+  pedalR: {fileID: 5646770795471466621}
+  seat: {fileID: 3798265413701813787}
+  handL: {fileID: 5483020596313796099}
+  handR: {fileID: 8274858041589144854}
+  footL: {fileID: 7590190348720156410}
+  footR: {fileID: 5897487527685792194}
+  mountL: {fileID: 2773010357659308415}
+  mountR: {fileID: 5217150546860264162}
+--- !u!4 &7590190348720156410 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 211827876293091980, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &8274858041589144854 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1833921861446865248, guid: 88cecd1a1bf4d2c4ea59fed2929386ad, type: 3}
+  m_PrefabInstance: {fileID: 7756700201823865974}
+  m_PrefabAsset: {fileID: 0}
