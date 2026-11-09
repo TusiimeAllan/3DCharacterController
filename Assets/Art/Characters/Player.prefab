@@ -52,6 +52,7 @@ GameObject:
   - component: {fileID: 2188630293081521149}
   - component: {fileID: 5671638418268805908}
   - component: {fileID: 4888496659026386051}
+  - component: {fileID: 2027868552323421969}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -176,6 +177,10 @@ MonoBehaviour:
   GroundLayers:
     serializedVersion: 2
     m_Bits: 1
+  UphillSlowdown: 0.35
+  DownhillSpeedup: 0.15
+  SteepSlideSpeed: 7
+  SteepSlideAcceleration: 14
   StandingHeight: 1.8
   CrouchingHeight: 1.2
   CameraTransform: {fileID: 0}
@@ -441,6 +446,9 @@ MonoBehaviour:
   FootSmoothing: 18
   MaxPelvisDrop: 0.45
   PelvisSmoothing: 10
+  UphillLean: 0.5
+  DownhillLean: 0.3
+  MaxLean: 15
   LookWeight: 0.8
   BodyWeight: 0.15
   HeadWeight: 0.7
@@ -508,6 +516,32 @@ MonoBehaviour:
   EnableSlide: 1
   MinSlideSpeed: 4.5
   SlideHeight: 1
+--- !u!114 &2027868552323421969
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 31be5b2cbcde8454e9ca73bfffc13c1e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.ClimbController
+  EnableLedges: 1
+  EnableLadders: 1
+  Controller: {fileID: 8766155822904003866}
+  Parkour: {fileID: 4888496659026386051}
+  MinGrabHeight: 1.5
+  MaxGrabHeight: 2.4
+  HangHandHeight: 2.25
+  WallDistance: 0.32
+  ShimmySpeed: 0.5
+  LadderSpeed: 0.8
+  LadderClipSpeed: 0.75
+  LadderDistance: 0.4
+  LadderTopExit: 1.9
+  AlignRate: 10
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

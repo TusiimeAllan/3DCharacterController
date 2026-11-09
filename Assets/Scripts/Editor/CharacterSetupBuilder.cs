@@ -79,6 +79,7 @@ namespace CharacterControllerSystem.EditorTools
             StrafeStatesBuilder.Apply(controller); // face the camera and move in any direction
             ParkourBuilder.ApplyAnimator(controller); // hurdle, climb and drop states
             SlopeStatesBuilder.Apply(controller); // slide pose for slopes over the limit
+            ClimbStatesBuilder.Apply(controller); // ledge hang, shimmy and ladder
             Debug.Log($"{Tag} Animator built at {p.ControllerPath}", controller);
             return controller;
         }

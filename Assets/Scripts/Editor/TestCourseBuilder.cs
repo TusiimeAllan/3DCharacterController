@@ -67,6 +67,7 @@ namespace CharacterControllerSystem.EditorTools
                 MovingPlatforms();
                 PushCrates();
                 Parkour();
+                LedgesAndLadder();
 
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -363,6 +364,65 @@ namespace CharacterControllerSystem.EditorTools
                 Box(g, $"Platform_{h:0.0}", new Vector3(lx - 1f, 0f, z0 - 10f), new Vector3(lx + 1f, h, z0 - 5f), mat);
                 Label(g, $"{h:0.0} m", new Vector3(lx, h + 0.6f, z0 - 5f), 180f);
             }
+        }
+
+        /// <summary>
+        /// A 3 m wall to jump at, grab and shimmy along (too tall to vault), and a 4 m platform with a ladder.
+        /// Run towards -z.
+        /// </summary>
+        private static void LedgesAndLadder()
+        {
+            var g = Group("16 Ledges and Ladder");
+            Sign(g, "LEDGES + LADDER", "Jump at the wall to grab. A/D shimmy, W climb, S drop", new Vector3(-44f, 3.4f, -10f), 180f);
+            Box(g, "LedgeWall_3.0", new Vector3(-47f, 0f, -21f), new Vector3(-41f, 3f, -19f), "Blue");
+            Label(g, "3.0 m", new Vector3(-44f, 3.6f, -19f), 180f);
+
+            Box(g, "LadderPlatform_4.0", new Vector3(-47f, 0f, -42f), new Vector3(-41f, 4f, -36f), "Purple");
+            Label(g, "4.0 m", new Vector3(-42f, 4.6f, -36f), 180f);
+            var ladderGo = new GameObject("Ladder");
+            ladderGo.transform.SetParent(g, false);
+            ladderGo.transform.position = new Vector3(-44f, 0f, -36f);
+            ladderGo.transform.rotation = Quaternion.LookRotation(Vector3.forward); // climbing face points +z
+            var ladder = ladderGo.AddComponent<CharacterControllerSystem.Ladder>();
+            ladder.Height = 4f;
+            ladder.HalfWidth = 0.35f;
+            // Rails and rungs are decoration only: no colliders, so they don't catch the capsule.
+            void Part(string name, Vector3 min, Vector3 max)
+            {
+                var part = Box(g, name, min, max, "Grey");
+                var col = part.GetComponent<Collider>();
+                if (col != null) Object.DestroyImmediate(col);
+                part.transform.SetParent(ladderGo.transform, true);
+            }
+            Part("Rail_L", new Vector3(-44.4f, 0f, -36f), new Vector3(-44.33f, 4.4f, -35.92f));
+            Part("Rail_R", new Vector3(-43.67f, 0f, -36f), new Vector3(-43.6f, 4.4f, -35.92f));
+            for (int i = 1; i <= 13; i++)
+                Part($"Rung_{i}", new Vector3(-44.33f, i * 0.3f, -35.98f), new Vector3(-43.67f, i * 0.3f + 0.04f, -35.94f));
+        }
+
+        /// <summary>Adds only the ledge and ladder station to the loaded OpenWorld scene, without saving it.</summary>
+        [MenuItem("Tools/Character Controller/Add Ledge and Ladder Station (OpenWorld)")]
+        public static void AddClimbStationOnly()
+        {
+            var scene = EditorSceneManager.GetSceneByPath(ScenePath);
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError($"{Tag} Open {ScenePath} first.");
+                return;
+            }
+            GameObject root = null;
+            foreach (var go in scene.GetRootGameObjects()) if (go.name == RootName) root = go;
+            if (root == null)
+            {
+                Debug.LogError($"{Tag} No {RootName} in the scene, run Build Test Course instead.");
+                return;
+            }
+            var old = root.transform.Find("16 Ledges and Ladder");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            CreateMaterials();
+            _root = root.transform;
+            LedgesAndLadder();
+            EditorSceneManager.MarkSceneDirty(scene);
         }
 
         /// <summary>Adds only the parkour station to the loaded OpenWorld scene, without saving it.</summary>

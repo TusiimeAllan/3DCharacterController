@@ -41,6 +41,8 @@ namespace CharacterControllerSystem.EditorTools
             (Events + "VaultOff/Run_JumpDownLow_Roll_Run_Mirror.anim", ParkourKind.DropLow),
             (Events + "VaultOff/Run_JumpDownHigh_Roll_Run.anim", ParkourKind.DropHigh),
             (Events + "VaultOff/Run_JumpDownHigh_Roll_Run_Mirror.anim", ParkourKind.DropHigh),
+            (Events + "VaultUp/Run_JumpUpHigh_Run.anim", ParkourKind.ClimbFromHang),
+            (Events + "VaultUp/Run_JumpUpHigh_Run_Mirror.anim", ParkourKind.ClimbFromHang),
             (Events + "RunSlide_ToRight_1.anim", ParkourKind.Slide),
             (Events + "RunSlide_ToRight_2.anim", ParkourKind.Slide),
         };
@@ -127,6 +129,7 @@ namespace CharacterControllerSystem.EditorTools
             {
                 case ParkourKind.ClimbMedium:
                 case ParkourKind.ClimbHigh:
+                case ParkourKind.ClimbFromHang:
                 {
                     int rise = FirstIndex(pos, 0, p => p.y > y0 + 0.08f);
                     if (rise < 0) return null;
@@ -141,6 +144,14 @@ namespace CharacterControllerSystem.EditorTools
                     start = Mathf.Max(0, rise - Frames(0.45f));
                     contact = rise;
                     height = pos[end].y - y0;
+                    if (kind == ParkourKind.ClimbFromHang)
+                    {
+                        // Start where the hands have reached the ledge and the body hangs below it.
+                        start = FirstIndex(pos, rise, p => p.y >= y0 + 0.6f * height);
+                        if (start < 0 || start >= end) return null;
+                        contact = start;
+                        height = pos[end].y - pos[start].y;
+                    }
                     break;
                 }
                 case ParkourKind.DropLow:
@@ -207,10 +218,10 @@ namespace CharacterControllerSystem.EditorTools
 
             return new ParkourMove
             {
-                Name = clip.name,
+                Name = kind == ParkourKind.ClimbFromHang ? clip.name + "_FromHang" : clip.name,
                 Kind = kind,
                 Clip = clip,
-                StateName = StatePrefix + clip.name,
+                StateName = StatePrefix + (kind == ParkourKind.ClimbFromHang ? clip.name + "_FromHang" : clip.name),
                 WindowStart = start * dt,
                 WindowEnd = end * dt,
                 Height = height,

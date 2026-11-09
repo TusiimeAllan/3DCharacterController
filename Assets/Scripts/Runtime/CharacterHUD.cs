@@ -254,6 +254,13 @@ namespace CharacterControllerSystem
                 var e = AddLegendEntry(parkour.ToggleKey.ToString(), "Parkour: run at obstacles, sprint + crouch slides");
                 e.IsOn = () => parkour.EnableParkour;
                 _legend.Add(e);
+                var climbing = parkour.GetComponent<ClimbController>();
+                if (climbing != null)
+                {
+                    var c = AddLegendEntry("Ledge/Ladder", "Jump to grab, W/S climb, A/D shimmy");
+                    c.IsOn = () => climbing.IsClimbing;
+                    _legend.Add(c);
+                }
             }
 
             var acts = FindAnyObjectByType<CharacterActions>();

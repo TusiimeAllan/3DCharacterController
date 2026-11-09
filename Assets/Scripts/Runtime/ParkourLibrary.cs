@@ -18,6 +18,8 @@ namespace CharacterControllerSystem
         DropHigh,
         /// <summary>Slide along the ground (sprint, then crouch).</summary>
         Slide,
+        /// <summary>Haul up onto a ledge from hanging on it (second half of a high climb).</summary>
+        ClimbFromHang,
     }
 
     /// <summary>

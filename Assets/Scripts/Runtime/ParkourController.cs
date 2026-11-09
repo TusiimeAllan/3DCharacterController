@@ -289,6 +289,34 @@ namespace CharacterControllerSystem
 
         // ---------------------------------------------------------------- execution
 
+        /// <summary>
+        /// Starts a move from where the character is now, ending at endY (e.g. climbing up from a ledge hang or
+        /// off the top of a ladder). Returns false when the library has no move of that kind.
+        /// </summary>
+        public bool BeginFromHere(ParkourKind kind, Vector3 face, float endY)
+        {
+            if (Library == null || IsActive) return false;
+            var options = new List<int>();
+            for (int i = 0; i < Library.Moves.Count; i++)
+                if (Library.Moves[i].Kind == kind && Library.Moves[i].Path != null && Library.Moves[i].Path.Length > 1) options.Add(i);
+            if (options.Count == 0) return false;
+            int index = options[Random.Range(0, options.Count)];
+            _move = Library.Moves[index];
+            _origin = transform.position;
+            _forward = Flat(face);
+            _startRotation = transform.rotation;
+            _forwardScale = 1f;
+            _heightScale = Mathf.Max(0.3f, (endY - _origin.y) / Mathf.Max(0.05f, _move.Height));
+            _endY = endY;
+            _elapsed = 0f;
+            _collide = false;
+            IsActive = true;
+            _paramSet = true;
+            SetParkourParam(index + 1);
+            Controller.ExternallyDriven = true;
+            return true;
+        }
+
         private void Begin(ParkourKind kind, Vector3 pos, Vector3 face, float contactDistance, float height, float endY)
         {
             var options = new List<int>();
