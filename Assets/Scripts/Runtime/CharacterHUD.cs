@@ -101,8 +101,8 @@ namespace CharacterControllerSystem
             BuildLegend();
         }
 
-        // Other components finish setting up in their Awake (e.g. the LaFAN1 database), which can run
-        // after this OnEnable; rebuild once everything is awake.
+        // Other components finish setting up in their Awake, which can run after this OnEnable;
+        // rebuild once everything is awake.
         private void Start() => BuildLegend();
 
         private void OnDisable()
@@ -234,12 +234,6 @@ namespace CharacterControllerSystem
                 var e = AddLegendEntry(mm.ToggleKey.ToString(), "Motion matching");
                 e.IsOn = () => mm.UseMotionMatching;
                 _legend.Add(e);
-                if (mm.HasAlternateAnimData)
-                {
-                    var db = AddLegendEntry(mm.AnimDataToggleKey.ToString(), "LaFAN1 database");
-                    db.IsOn = () => mm.AnimDataIndex == 1;
-                    _legend.Add(db);
-                }
             }
             var grounding = FindAnyObjectByType<HumanoidGrounding>();
             if (grounding != null && !pad)

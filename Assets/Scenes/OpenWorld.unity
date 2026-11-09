@@ -41882,6 +41882,12 @@ MonoBehaviour:
   CollisionRadius: 0.2
   MinDistance: 0.5
   RecoverSpeed: 6
+  KeepPlayerVisible: 1
+  MaxAutoYaw: 80
+  MaxAutoPitch: 35
+  AutoSmoothTime: 0.25
+  ReturnDelay: 0.6
+  SightRadius: 0.06
 --- !u!1 &331614011
 GameObject:
   m_ObjectHideFlags: 0

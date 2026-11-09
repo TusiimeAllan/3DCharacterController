@@ -52,23 +52,7 @@ namespace CharacterControllerSystem
         [Tooltip("Seconds to hand back to motion matching after landing or standing up")]
         public float LayerFadeOut = 0.25f;
 
-        [Header("Alternate Database")]
-        [Tooltip("Second MxM database to compare against, e.g. the LaFAN1 build. In the Editor it is " +
-                 "loaded from the LaFAN1 build path when left empty.")]
-        public MxMAnimData AlternateAnimData;
-#if ENABLE_INPUT_SYSTEM
-        public Key AnimDataToggleKey = Key.L;
-#endif
-        public const string LaFanAnimDataPath = "Assets/Art/MotionMatching/LaFAN1/LaFAN1_AnimData.asset";
-
-        /// <summary>True when an alternate database is loaded and can be switched to.</summary>
-        public bool HasAlternateAnimData { get; private set; }
-        /// <summary>Index of the database in use: 0 = the Player's own, 1 = the alternate.</summary>
-        public int AnimDataIndex { get; private set; }
-        public string AnimDataName => Mxm != null && Mxm.CurrentAnimData != null ? Mxm.CurrentAnimData.name : "";
-
         public event System.Action<bool> ModeChanged;
-        public event System.Action<int> AnimDataChanged;
 
         private static readonly FieldInfo ControllerPlayableField =
             typeof(MxMAnimator).GetField("m_animControllerPlayable", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -95,7 +79,6 @@ namespace CharacterControllerSystem
         private float _layerWeight = 1f;
         private bool _sprinting;
         private bool _calibrationReady;
-        private int _alternateIndex = -1;
         private EAngularErrorWarp _angularWarp;
 
         private void Reset() => AutoAssign();
@@ -120,7 +103,6 @@ namespace CharacterControllerSystem
 
             EnsureSearchManager();
             _actions = GetComponent<CharacterActions>();
-            AddAlternateAnimData();
 
             // We drive the animation from here, the controller only publishes its state.
             Controller.DriveAnimator = false;
@@ -144,8 +126,6 @@ namespace CharacterControllerSystem
         {
 #if ENABLE_INPUT_SYSTEM
             if (Keyboard.current != null && Keyboard.current[ToggleKey].wasPressedThisFrame) SetMode(!UseMotionMatching);
-            if (Keyboard.current != null && Keyboard.current[AnimDataToggleKey].wasPressedThisFrame)
-                SetAnimData(AnimDataIndex == 0 ? 1 : 0);
 #endif
             // Trajectory: same input and camera the controller moves with, at the speed it is moving.
             Vector2 move = Controller.MovementLocked || Controller.ExternallyDriven ? Vector2.zero : Inputs.move;
@@ -194,36 +174,6 @@ namespace CharacterControllerSystem
             if (UseMotionMatching == useMotionMatching) return;
             UseMotionMatching = useMotionMatching;
             ModeChanged?.Invoke(useMotionMatching);
-        }
-
-        /// <summary>Switches motion matching database (0 = own, 1 = alternate), keeping the gait calibration.</summary>
-        public void SetAnimData(int index)
-        {
-            if (index == AnimDataIndex || index < 0 || index > (HasAlternateAnimData ? 1 : 0)) return;
-            Mxm.SwapAnimData(index == 0 ? 0 : _alternateIndex);
-            AnimDataIndex = index;
-            ApplyGait(_sprinting, force: true);
-            AnimDataChanged?.Invoke(index);
-        }
-
-        /// <summary>Appends the alternate database before MxMAnimator.Start prepares its databases.</summary>
-        private void AddAlternateAnimData()
-        {
-#if UNITY_EDITOR
-            if (AlternateAnimData == null)
-                AlternateAnimData = UnityEditor.AssetDatabase.LoadAssetAtPath<MxMAnimData>(LaFanAnimDataPath);
-#endif
-            var list = Mxm.AnimData;
-            if (AlternateAnimData == null || list == null || list.Length == 0) return;
-            _alternateIndex = System.Array.IndexOf(list, AlternateAnimData);
-            if (_alternateIndex < 0)
-            {
-                System.Array.Resize(ref list, list.Length + 1);
-                _alternateIndex = list.Length - 1;
-                list[_alternateIndex] = AlternateAnimData;
-                Mxm.AnimData = list;
-            }
-            HasAlternateAnimData = _alternateIndex > 0;
         }
 
         private void ApplyGait(bool sprinting, bool force = false)

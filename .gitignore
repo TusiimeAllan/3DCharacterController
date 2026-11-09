@@ -60,9 +60,3 @@ ehthumbs.db
 Thumbs.db
 desktop.ini
 
-# LaFAN1 (Ubisoft, CC BY-NC-ND 4.0): personal use only, never commit or share the data or anything converted from it
-/ExternalData/
-/Assets/Art/Animations/LaFAN1/
-/Assets/Art/Animations/LaFAN1.meta
-/Assets/Art/MotionMatching/LaFAN1/
-/Assets/Art/MotionMatching/LaFAN1.meta
