@@ -41,8 +41,16 @@ namespace CharacterControllerSystem.EditorTools
                 CreateMaterials();
                 _root = new GameObject(RootName).transform;
 
+                Bounds? groundBounds = null;
                 foreach (var go in scene.GetRootGameObjects())
-                    if (go.name == "Ground") go.GetComponent<Renderer>().sharedMaterial = Mats["Ground"];
+                {
+                    if (go.name != "Ground") continue;
+                    var r = go.GetComponent<Renderer>();
+                    r.sharedMaterial = Mats["Ground"];
+                    groundBounds = r.bounds;
+                }
+                if (groundBounds.HasValue) BoundaryWalls(groundBounds.Value);
+                else Debug.LogWarning($"{Tag} No 'Ground' object found, boundary walls were not added.");
 
                 Curbs(-40f);
                 Stairs(-31f);
@@ -306,6 +314,35 @@ namespace CharacterControllerSystem.EditorTools
             disc.transform.position = new Vector3(27f, 0.15f, -32f);
             AddMover(disc.gameObject, Vector3.zero, 0f, 0f, 30f);
             Label(g, "Turntable", new Vector3(27f, 1.6f, -28.6f), 180f);
+        }
+
+        // ================================================================ Boundary
+
+        /// <summary>
+        /// Invisible walls (colliders only) along every edge of the ground, tall enough that even a
+        /// jump from the drop tower cannot clear them, so nothing can leave the map and fall forever.
+        /// </summary>
+        private static void BoundaryWalls(Bounds ground)
+        {
+            var g = Group("00 Boundary");
+            const float height = 30f, thickness = 1f;
+            float y = ground.max.y + height * 0.5f;
+            float spanX = ground.size.x + thickness * 2f, spanZ = ground.size.z + thickness * 2f;
+
+            void Wall(string name, Vector3 centre, Vector3 size)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(g, false);
+                go.transform.position = centre;
+                go.AddComponent<BoxCollider>().size = size;
+                GameObjectUtility.SetStaticEditorFlags(go, StaticEditorFlags.NavigationStatic);
+            }
+
+            // Walls sit just outside the ground so the full surface stays walkable.
+            Wall("Boundary_North", new Vector3(ground.center.x, y, ground.max.z + thickness * 0.5f), new Vector3(spanX, height, thickness));
+            Wall("Boundary_South", new Vector3(ground.center.x, y, ground.min.z - thickness * 0.5f), new Vector3(spanX, height, thickness));
+            Wall("Boundary_East", new Vector3(ground.max.x + thickness * 0.5f, y, ground.center.z), new Vector3(thickness, height, spanZ));
+            Wall("Boundary_West", new Vector3(ground.min.x - thickness * 0.5f, y, ground.center.z), new Vector3(thickness, height, spanZ));
         }
 
         // ================================================================ Geometry helpers
