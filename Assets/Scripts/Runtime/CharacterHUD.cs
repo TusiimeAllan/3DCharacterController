@@ -248,6 +248,13 @@ namespace CharacterControllerSystem
                 e.IsOn = () => grounding.Enabled;
                 _legend.Add(e);
             }
+            var parkour = FindAnyObjectByType<ParkourController>();
+            if (parkour != null && !pad)
+            {
+                var e = AddLegendEntry(parkour.ToggleKey.ToString(), "Parkour: run at obstacles");
+                e.IsOn = () => parkour.EnableParkour;
+                _legend.Add(e);
+            }
 
             var acts = FindAnyObjectByType<CharacterActions>();
             if (acts != null)

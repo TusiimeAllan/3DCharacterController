@@ -147,7 +147,7 @@ namespace CharacterControllerSystem
                 SetAnimData(AnimDataIndex == 0 ? 1 : 0);
 #endif
             // Trajectory: same input and camera the controller moves with, at the speed it is moving.
-            Vector2 move = Controller.MovementLocked ? Vector2.zero : Inputs.move;
+            Vector2 move = Controller.MovementLocked || Controller.ExternallyDriven ? Vector2.zero : Inputs.move;
             Trajectory.SetInput(move);
             bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && move != Vector2.zero;
             if (sprinting != _sprinting) ApplyGait(sprinting);
@@ -167,7 +167,7 @@ namespace CharacterControllerSystem
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || Controller.IsStrafing || InLandingState ||
+                                 Controller.IsCrouching || Controller.IsStrafing || Controller.ExternallyDriven || InLandingState ||
                                  (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;

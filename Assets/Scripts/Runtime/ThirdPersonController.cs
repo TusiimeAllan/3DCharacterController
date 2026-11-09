@@ -82,6 +82,8 @@ namespace CharacterControllerSystem
         public bool MovementLocked;
         [Tooltip("Multiplies the target speed, e.g. slower while pushing")]
         public float SpeedScale = 1f;
+        [Tooltip("Set by moves that place the character themselves (parkour): no input, gravity or collision moves")]
+        public bool ExternallyDriven;
 
         [Header("Strafe")]
         [Tooltip("Holding the Strafe input keeps the character facing the camera and moves it in any direction")]
@@ -187,6 +189,20 @@ namespace CharacterControllerSystem
         private void Update()
         {
             _hasAnimator = _animator != null && DriveAnimator;
+            if (ExternallyDriven)
+            {
+                // Something else (parkour) places the character: report a calm, grounded state.
+                Grounded = true;
+                IsJumping = IsFreeFalling = IsStrafing = false;
+                _turnDir = 0;
+                _verticalVelocity = -2f;
+                FallSpeed = 0f;
+                _wasAirborne = false;
+                _speed = 0f;
+                LocalVelocity = Vector2.zero;
+                _input.jump = false;
+                return;
+            }
             GroundedCheck();
             JumpAndGravity();
             Crouch();

@@ -51,6 +51,7 @@ GameObject:
   - component: {fileID: 5856110124234482876}
   - component: {fileID: 2188630293081521149}
   - component: {fileID: 5671638418268805908}
+  - component: {fileID: 4888496659026386051}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -142,6 +143,7 @@ MonoBehaviour:
   crouch: 0
   interact: 0
   attack: 0
+  strafe: 0
   cursorLocked: 1
   cursorInputForLook: 1
   gamepadScheme: Gamepad
@@ -184,6 +186,16 @@ MonoBehaviour:
   LandingHoldTime: 0.35
   MovementLocked: 0
   SpeedScale: 1
+  ExternallyDriven: 0
+  AllowStrafe: 1
+  StrafeSprintSpeed: 4.2
+  StrafeBackwardScale: 0.7
+  StrafeRotationSmoothTime: 0.05
+  StrafeTurnInPlace: 1
+  StrafeTurnThreshold: 70
+  StrafeTurnSettleAngle: 20
+  StrafeTurnAngle: 90
+  StrafeTurnDuration: 0.9
 --- !u!114 &8954366063464921596
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -401,6 +413,8 @@ MonoBehaviour:
   SprintBias: 6
   LayerFadeIn: 0.1
   LayerFadeOut: 0.25
+  AlternateAnimData: {fileID: 0}
+  AnimDataToggleKey: 26
 --- !u!114 &2188630293081521149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -455,6 +469,7 @@ MonoBehaviour:
   HitBlendIn: 0.05
   MaxPushMass: 150
   PushSpeed: 1.1
+  PushContactGrace: 0.3
   HitKey: 22
   DieKey: 25
   PickUpKey: 20
@@ -462,6 +477,34 @@ MonoBehaviour:
   RepairKey: 32
   DanceKey: 36
   TalkKey: 34
+--- !u!114 &4888496659026386051
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 83904257b6088d64bb93e5465c02a1f9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.ParkourController
+  Library: {fileID: 11400000, guid: 47a63bc438c933349ba7f2dbf4d51c58, type: 2}
+  EnableParkour: 1
+  ToggleKey: 30
+  Controller: {fileID: 8766155822904003866}
+  MinSpeed: 1.2
+  MaxApproachAngle: 40
+  ProbeRadius: 0.15
+  MinObstacleHeight: 0.35
+  MaxHurdleHeight: 0.95
+  MaxHurdleDepth: 0.9
+  MaxMediumClimb: 1.75
+  MaxClimbHeight: 2.5
+  MinDrop: 0.6
+  MaxLowDrop: 1.5
+  MaxDrop: 3.2
+  Cooldown: 0.3
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

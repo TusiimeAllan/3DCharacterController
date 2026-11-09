@@ -66,6 +66,7 @@ namespace CharacterControllerSystem.EditorTools
                 PillarForest();
                 MovingPlatforms();
                 PushCrates();
+                Parkour();
 
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -338,6 +339,55 @@ namespace CharacterControllerSystem.EditorTools
                 rb.interpolation = RigidbodyInterpolation.Interpolate;
                 Label(g, mass > 150f ? $"{mass:0} kg (too heavy)" : $"{mass:0} kg", new Vector3(x, size + 0.6f, -14f), 180f);
             }
+        }
+
+        /// <summary>
+        /// Lanes to run along (towards -z): hurdles, ledges to climb at medium and high heights, and drops
+        /// back down from each platform.
+        /// </summary>
+        private static void Parkour()
+        {
+            var g = Group("15 Parkour");
+            Sign(g, "PARKOUR", "Run at it: hurdle, climb, drop (P toggles)", new Vector3(13f, 3.4f, -18f), 180f);
+            const float z0 = -22f;
+            // Lane 1: hurdles of 0.5 and 0.8 m.
+            float x = 9.5f;
+            Box(g, "Hurdle_0.5", new Vector3(x - 1f, 0f, z0 - 4.4f), new Vector3(x + 1f, 0.5f, z0 - 4f), "Yellow");
+            Label(g, "0.5 m", new Vector3(x, 1.1f, z0 - 4.2f), 180f);
+            Box(g, "Hurdle_0.8", new Vector3(x - 1f, 0f, z0 - 11.4f), new Vector3(x + 1f, 0.8f, z0 - 11f), "Yellow");
+            Label(g, "0.8 m", new Vector3(x, 1.4f, z0 - 11.2f), 180f);
+            // Lanes 2 to 4: a platform to climb onto and drop off the far end.
+            var lanes = new (float x, float h, string mat)[] { (12f, 1.1f, "Orange"), (14.5f, 1.6f, "Purple"), (17f, 2.2f, "Red") };
+            foreach (var (lx, h, mat) in lanes)
+            {
+                Box(g, $"Platform_{h:0.0}", new Vector3(lx - 1f, 0f, z0 - 10f), new Vector3(lx + 1f, h, z0 - 5f), mat);
+                Label(g, $"{h:0.0} m", new Vector3(lx, h + 0.6f, z0 - 5f), 180f);
+            }
+        }
+
+        /// <summary>Adds only the parkour station to the loaded OpenWorld scene, without saving it.</summary>
+        [MenuItem("Tools/Character Controller/Add Parkour Station (OpenWorld)")]
+        public static void AddParkourOnly()
+        {
+            var scene = EditorSceneManager.GetSceneByPath(ScenePath);
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError($"{Tag} Open {ScenePath} first.");
+                return;
+            }
+            GameObject root = null;
+            foreach (var go in scene.GetRootGameObjects()) if (go.name == RootName) root = go;
+            if (root == null)
+            {
+                Debug.LogError($"{Tag} No {RootName} in the scene, run Build Test Course instead.");
+                return;
+            }
+            var old = root.transform.Find("15 Parkour");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            CreateMaterials();
+            _root = root.transform;
+            Parkour();
+            EditorSceneManager.MarkSceneDirty(scene);
         }
 
         /// <summary>Adds only the push crate station to the loaded OpenWorld scene, without saving it.</summary>

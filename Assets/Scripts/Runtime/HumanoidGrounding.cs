@@ -114,7 +114,8 @@ namespace CharacterControllerSystem
             float dt = Time.deltaTime;
             // Rolls and landings move the feet on purpose; don't pin them to the ground then.
             // Deaths, seats and full-body actions place the whole body themselves.
-            bool posed = _actions != null && _actions.isActiveAndEnabled && _actions.OverridesPose;
+            bool posed = (_actions != null && _actions.isActiveAndEnabled && _actions.OverridesPose) ||
+                         (Controller != null && Controller.ExternallyDriven); // parkour places the body itself
             bool grounded = (Controller == null || Controller.Grounded) &&
                             (_locomotion == null || !_locomotion.InLandingState) && !posed;
             _posed = posed;

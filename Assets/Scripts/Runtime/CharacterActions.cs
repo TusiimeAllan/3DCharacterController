@@ -215,7 +215,7 @@ namespace CharacterControllerSystem
         // ---------------------------------------------------------------- Internals
 
         private bool CanAct => !IsDead && !IsSitting && !_inAction && _requested == ActionId.None &&
-                               Controller.Grounded && !Controller.IsCrouching && !Controller.IsJumping;
+                               Controller.Grounded && !Controller.IsCrouching && !Controller.IsJumping && !Controller.ExternallyDriven;
 
         private static bool IsLoop(ActionId action) => action == ActionId.Dance || action == ActionId.Talk;
 
