@@ -78,6 +78,7 @@ namespace CharacterControllerSystem.EditorTools
             ActionStatesBuilder.Apply(controller); // hits, death, sit, interact, punches, emotes, push
             StrafeStatesBuilder.Apply(controller); // face the camera and move in any direction
             ParkourBuilder.ApplyAnimator(controller); // hurdle, climb and drop states
+            SlopeStatesBuilder.Apply(controller); // slide pose for slopes over the limit
             Debug.Log($"{Tag} Animator built at {p.ControllerPath}", controller);
             return controller;
         }

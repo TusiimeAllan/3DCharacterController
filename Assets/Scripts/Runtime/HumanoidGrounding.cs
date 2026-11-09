@@ -47,6 +47,13 @@ namespace CharacterControllerSystem
         public float MaxPelvisDrop = 0.45f;
         public float PelvisSmoothing = 10f;
 
+        [Header("Slope Lean")]
+        [Tooltip("Share of the slope angle the body leans into when walking uphill")]
+        [Range(0f, 1f)] public float UphillLean = 0.5f;
+        [Tooltip("Share of the slope angle the body leans back when walking downhill")]
+        [Range(0f, 1f)] public float DownhillLean = 0.3f;
+        public float MaxLean = 15f;
+
         [Header("Look At")]
         [Range(0f, 1f)] public float LookWeight = 0.8f;
         [Range(0f, 1f)] public float BodyWeight = 0.15f;
@@ -65,6 +72,7 @@ namespace CharacterControllerSystem
         private float _pelvisOffset;
         private float _lookWeight;
         private bool _posed;
+        private float _lean;
         private Vector3 _lookTarget;
         private int _solvedFrame = -1;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
@@ -115,12 +123,13 @@ namespace CharacterControllerSystem
             // Rolls and landings move the feet on purpose; don't pin them to the ground then.
             // Deaths, seats and full-body actions place the whole body themselves.
             bool posed = (_actions != null && _actions.isActiveAndEnabled && _actions.OverridesPose) ||
-                         (Controller != null && Controller.ExternallyDriven); // parkour places the body itself
+                         (Controller != null && (Controller.ExternallyDriven || Controller.IsSlidingOnSlope)); // posed by the clip
             bool grounded = (Controller == null || Controller.Grounded) &&
                             (_locomotion == null || !_locomotion.InLandingState) && !posed;
             _posed = posed;
             _ikWeight = Mathf.MoveTowards(_ikWeight, EnableGrounding && grounded ? 1f : 0f, dt * 6f);
 
+            ApplySlopeLean(dt, grounded);
             if (_ikWeight > 0.001f) SolveFeet(dt);
             else
             {
@@ -129,6 +138,20 @@ namespace CharacterControllerSystem
             }
 
             SolveLookAt(dt);
+        }
+
+        /// <summary>Lean the body into a climb and back on a descent (the feet are re-planted after).</summary>
+        private void ApplySlopeLean(float dt, bool grounded)
+        {
+            float target = 0f;
+            if (EnableGrounding && grounded && Controller != null && Controller.TargetSpeed > 0.1f)
+            {
+                float degrees = Mathf.Asin(Mathf.Clamp(Controller.SlopeAlongMove, -1f, 1f)) * Mathf.Rad2Deg;
+                target = Mathf.Clamp(degrees * (degrees > 0f ? UphillLean : DownhillLean), -MaxLean, MaxLean);
+            }
+            _lean = Mathf.Lerp(_lean, target, 1f - Mathf.Exp(-6f * dt));
+            if (Mathf.Abs(_lean) > 0.01f)
+                _animator.bodyRotation = Quaternion.AngleAxis(_lean, transform.right) * _animator.bodyRotation;
         }
 
         private void SolveFeet(float dt)

@@ -84,6 +84,7 @@ namespace CharacterControllerSystem
         private static readonly int StrafeXId = Animator.StringToHash("StrafeX");
         private static readonly int StrafeZId = Animator.StringToHash("StrafeZ");
         private static readonly int StrafeTurnId = Animator.StringToHash("StrafeTurn");
+        private static readonly int SlopeSlideId = Animator.StringToHash("SlopeSlide");
         private const string LandingTag = "Landing";
 
         /// <summary>True while the Animator Controller plays a landing or roll (states tagged "Landing").</summary>
@@ -151,7 +152,7 @@ namespace CharacterControllerSystem
             Trajectory.SetInput(move);
             bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && move != Vector2.zero;
             if (sprinting != _sprinting) ApplyGait(sprinting);
-            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale;
+            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale * Controller.SlopeSpeedFactor;
 
             // MxM's angular error warping turns the body towards the travel direction. While strafing the
             // controller keeps it facing the camera instead, so the two would fight.
@@ -167,7 +168,7 @@ namespace CharacterControllerSystem
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || Controller.IsStrafing || Controller.ExternallyDriven || InLandingState ||
+                                 Controller.IsCrouching || Controller.IsStrafing || Controller.ExternallyDriven || Controller.IsSlidingOnSlope || InLandingState ||
                                  (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
@@ -185,6 +186,7 @@ namespace CharacterControllerSystem
             _controllerLayer.SetFloat(StrafeXId, Controller.LocalVelocity.x);
             _controllerLayer.SetFloat(StrafeZId, Controller.LocalVelocity.y);
             _controllerLayer.SetInteger(StrafeTurnId, Controller.StrafeTurn);
+            _controllerLayer.SetBool(SlopeSlideId, Controller.IsSlidingOnSlope);
         }
 
         public void SetMode(bool useMotionMatching)

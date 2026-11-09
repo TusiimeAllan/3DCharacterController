@@ -47,6 +47,15 @@ namespace CharacterControllerSystem
         [Tooltip("What layers count as ground")]
         public LayerMask GroundLayers = ~0;
 
+        [Header("Slopes")]
+        [Tooltip("Share of speed lost walking straight up a slope, scaled by its steepness (0.35 = 17% slower at 30 deg)")]
+        [Range(0f, 1f)] public float UphillSlowdown = 0.35f;
+        [Tooltip("Share of speed gained walking straight down a slope, scaled by its steepness")]
+        [Range(0f, 1f)] public float DownhillSpeedup = 0.15f;
+        [Tooltip("Top speed sliding down a slope steeper than the slope limit (m/s)")]
+        public float SteepSlideSpeed = 7f;
+        public float SteepSlideAcceleration = 14f;
+
         [Header("Crouch Collider")]
         public float StandingHeight = 1.8f;
         public float CrouchingHeight = 1.2f;
@@ -110,6 +119,17 @@ namespace CharacterControllerSystem
 
         /// <summary>True while strafing: facing follows the camera, not the movement.</summary>
         public bool IsStrafing { get; private set; }
+        /// <summary>Surface normal under the character (straight up when airborne or over an edge).</summary>
+        public Vector3 GroundNormal { get; private set; } = Vector3.up;
+        /// <summary>Steepness of the ground under the character, degrees.</summary>
+        public float GroundAngle { get; private set; }
+        /// <summary>Sine of the slope along the movement direction: positive uphill, negative downhill.</summary>
+        public float SlopeAlongMove { get; private set; }
+        /// <summary>Speed multiplier from the slope being walked (uphill slower, downhill a little faster).</summary>
+        public float SlopeSpeedFactor { get; private set; } = 1f;
+        /// <summary>True while sliding down a slope steeper than the CharacterController's slope limit.</summary>
+        public bool IsSlidingOnSlope { get; private set; }
+
         /// <summary>Smoothed planar velocity in the character's own frame (x right, y forward), m/s.</summary>
         public Vector2 LocalVelocity { get; private set; }
 
@@ -148,12 +168,16 @@ namespace CharacterControllerSystem
         private int _animStrafeX;
         private int _animStrafeZ;
         private int _animStrafeTurn;
+        private int _animSlopeSlide;
+        private Vector3 _slideVelocity;
+        private float _steepGrace;
 
         private bool _hasAnimator;
 
         private const float _threshold = 0.01f;
         private readonly Collider[] _groundHits = new Collider[8];
         private readonly RaycastHit[] _headroomHits = new RaycastHit[8];
+        private readonly RaycastHit[] _groundRayHits = new RaycastHit[8];
 
         private void Reset() => AutoAssignReferences();
 
@@ -201,6 +225,8 @@ namespace CharacterControllerSystem
                 _wasAirborne = false;
                 _speed = 0f;
                 LocalVelocity = Vector2.zero;
+                IsSlidingOnSlope = false;
+                _slideVelocity = Vector3.zero;
                 _input.jump = false;
                 return;
             }
@@ -223,6 +249,7 @@ namespace CharacterControllerSystem
             _animStrafeX = Animator.StringToHash("StrafeX");
             _animStrafeZ = Animator.StringToHash("StrafeZ");
             _animStrafeTurn = Animator.StringToHash("StrafeTurn");
+            _animSlopeSlide = Animator.StringToHash("SlopeSlide");
         }
 
         private void GroundedCheck()
@@ -241,6 +268,22 @@ namespace CharacterControllerSystem
                     break;
                 }
             }
+
+            // Surface under the centre (a ray, not a sphere, so box edges are not read as steep slopes).
+            GroundNormal = Vector3.up;
+            if (Grounded)
+            {
+                int n = Physics.RaycastNonAlloc(transform.position + Vector3.up * 0.3f, Vector3.down, _groundRayHits, 0.7f,
+                    GroundLayers, QueryTriggerInteraction.Ignore);
+                float nearest = float.MaxValue;
+                for (int i = 0; i < n; i++)
+                {
+                    if (_groundRayHits[i].transform.IsChildOf(transform) || _groundRayHits[i].distance >= nearest) continue;
+                    nearest = _groundRayHits[i].distance;
+                    GroundNormal = _groundRayHits[i].normal;
+                }
+            }
+            GroundAngle = Vector3.Angle(GroundNormal, Vector3.up);
 
             if (_hasAnimator) _animator.SetBool(_animGrounded, Grounded);
         }
@@ -294,6 +337,17 @@ namespace CharacterControllerSystem
             Vector3 inputDirection = new Vector3(move.x, 0.0f, move.y).normalized;
             // Facing the camera, "back" on the stick walks backwards: slow that down.
             if (IsStrafing) targetSpeed *= Mathf.Lerp(1f, StrafeBackwardScale, Mathf.Max(0f, -inputDirection.z));
+
+            // Slopes: slower uphill, a little faster downhill; slide down anything steeper than the slope limit.
+            Vector3 lastMoveDir = Quaternion.Euler(0f, _moveRotation, 0f) * Vector3.forward;
+            SlopeAlongMove = Grounded ? -Vector3.Dot(GroundNormal, lastMoveDir) : 0f;
+            bool steep = Grounded && GroundAngle > _controller.slopeLimit + 2f && GroundAngle < 80f;
+            // Bumps along a steep slope lose contact for a moment: keep sliding unless on walkable ground.
+            _steepGrace = steep ? 0.15f : _steepGrace - Time.deltaTime;
+            IsSlidingOnSlope = steep || (_steepGrace > 0f && !(Grounded && GroundAngle <= _controller.slopeLimit));
+            SlopeSpeedFactor = IsSlidingOnSlope ? 1f
+                : 1f - UphillSlowdown * Mathf.Max(0f, SlopeAlongMove) + DownhillSpeedup * Mathf.Max(0f, -SlopeAlongMove);
+            targetSpeed *= SlopeSpeedFactor;
 
             if (move == Vector2.zero) targetSpeed = 0.0f;
             TargetSpeed = targetSpeed;
@@ -379,7 +433,26 @@ namespace CharacterControllerSystem
             Vector3 targetDirection = Quaternion.Euler(0.0f, _moveRotation, 0.0f) * Vector3.forward;
             Vector3 planarVelocity = targetDirection.normalized * _speed;
 
-            _controller.Move(planarVelocity * Time.deltaTime +
+            Vector3 downhill = Vector3.ProjectOnPlane(Vector3.down, GroundNormal);
+            Vector3 flatDownhill = new Vector3(downhill.x, 0f, downhill.z);
+            if (IsSlidingOnSlope && flatDownhill.sqrMagnitude > 1e-4f)
+            {
+                flatDownhill.Normalize();
+                _slideVelocity = Vector3.MoveTowards(_slideVelocity, downhill.normalized * SteepSlideSpeed,
+                    SteepSlideAcceleration * Time.deltaTime);
+                // Steer across the slope, but never climb it; face down the slope.
+                float climbing = Vector3.Dot(planarVelocity, -flatDownhill);
+                if (climbing > 0f) planarVelocity += flatDownhill * climbing;
+                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDownhill),
+                    1f - Mathf.Exp(-8f * Time.deltaTime));
+            }
+            else
+            {
+                _slideVelocity = Vector3.MoveTowards(_slideVelocity, Vector3.zero,
+                    SteepSlideAcceleration * 2f * Time.deltaTime);
+            }
+
+            _controller.Move((planarVelocity + _slideVelocity) * Time.deltaTime +
                 new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
 
             // Velocity in the character's frame, for the strafe blend (smoothed so direction changes blend).
@@ -396,6 +469,7 @@ namespace CharacterControllerSystem
                 _animator.SetFloat(_animStrafeX, LocalVelocity.x);
                 _animator.SetFloat(_animStrafeZ, LocalVelocity.y);
                 _animator.SetInteger(_animStrafeTurn, _turnDir);
+                _animator.SetBool(_animSlopeSlide, IsSlidingOnSlope);
             }
         }
 
