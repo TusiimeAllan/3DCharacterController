@@ -92,6 +92,19 @@ namespace CharacterControllerSystem
         [Range(0.3f, 1f)] public float StrafeBackwardScale = 0.7f;
         [Tooltip("How fast the character turns to the camera while strafing")]
         [Range(0.0f, 0.3f)] public float StrafeRotationSmoothTime = 0.05f;
+        [Tooltip("Standing still while strafing, step around with the turn clips instead of sliding the feet")]
+        public bool StrafeTurnInPlace = true;
+        [Tooltip("Camera must be this far (degrees) from the body before a standing turn starts")]
+        [Range(20f, 170f)] public float StrafeTurnThreshold = 70f;
+        [Tooltip("Right after a turn, a leftover bigger than this (degrees) chains a shorter follow-up turn")]
+        [Range(5f, 60f)] public float StrafeTurnSettleAngle = 20f;
+        [Tooltip("Degrees one turn clip rotates (the most a single turn covers)")]
+        public float StrafeTurnAngle = 90f;
+        [Tooltip("Seconds one turn takes (the Mixamo turn 90 clips are about 0.9 s)")]
+        public float StrafeTurnDuration = 0.9f;
+
+        /// <summary>-1 turning left, 1 turning right, 0 not turning (standing turns while strafing).</summary>
+        public int StrafeTurn => _turnDir;
 
         /// <summary>True while strafing: facing follows the camera, not the movement.</summary>
         public bool IsStrafing { get; private set; }
@@ -104,6 +117,12 @@ namespace CharacterControllerSystem
         private float _targetRotation;
         private float _moveRotation;
         private float _rotationVelocity;
+        private int _turnDir;
+        private float _turnElapsed;
+        private float _turnStartYaw;
+        private float _turnAngle;
+        private float _turnTime;
+        private bool _turnChained;
         private float _verticalVelocity;
         private readonly float _terminalVelocity = 53.0f;
 
@@ -126,6 +145,7 @@ namespace CharacterControllerSystem
         private int _animStrafing;
         private int _animStrafeX;
         private int _animStrafeZ;
+        private int _animStrafeTurn;
 
         private bool _hasAnimator;
 
@@ -185,6 +205,7 @@ namespace CharacterControllerSystem
             _animStrafing = Animator.StringToHash("Strafing");
             _animStrafeX = Animator.StringToHash("StrafeX");
             _animStrafeZ = Animator.StringToHash("StrafeZ");
+            _animStrafeTurn = Animator.StringToHash("StrafeTurn");
         }
 
         private void GroundedCheck()
@@ -273,9 +294,46 @@ namespace CharacterControllerSystem
                 _moveRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
                                 CameraTransform.eulerAngles.y;
 
-            if (IsStrafing)
+            bool standing = move == Vector2.zero && Grounded && !IsJumping && _speed < 0.1f;
+            if (!IsStrafing || !StrafeTurnInPlace || !standing) _turnDir = 0;
+            if (!IsStrafing || !standing) _turnChained = false;
+
+            if (IsStrafing && StrafeTurnInPlace && standing)
             {
-                // Face where the camera looks, even standing still; move along the stick.
+                // Standing still: let the head follow small camera moves, and step round in 90 degree
+                // turns (synced to the turn clips) once the camera is far off, instead of sliding the feet.
+                _targetRotation = CameraTransform.eulerAngles.y;
+                _rotationVelocity = 0f;
+                if (_turnDir == 0)
+                {
+                    float delta = Mathf.DeltaAngle(transform.eulerAngles.y, _targetRotation);
+                    if (Mathf.Abs(delta) > (_turnChained ? StrafeTurnSettleAngle : StrafeTurnThreshold))
+                    {
+                        _turnDir = delta > 0f ? 1 : -1;
+                        _turnElapsed = 0f;
+                        _turnStartYaw = transform.eulerAngles.y;
+                        // A shorter turn plays the start of the clip, for proportionally less time.
+                        _turnAngle = Mathf.Min(Mathf.Abs(delta), StrafeTurnAngle);
+                        _turnTime = Mathf.Max(0.35f, StrafeTurnDuration * _turnAngle / StrafeTurnAngle);
+                    }
+                    else _turnChained = false;
+                }
+                if (_turnDir != 0)
+                {
+                    _turnElapsed += Time.deltaTime;
+                    float t = Mathf.Clamp01(_turnElapsed / _turnTime);
+                    float yaw = _turnStartYaw + _turnDir * _turnAngle * Mathf.SmoothStep(0f, 1f, t);
+                    transform.rotation = Quaternion.Euler(0.0f, yaw, 0.0f);
+                    if (t >= 1f)
+                    {
+                        _turnDir = 0;
+                        _turnChained = true; // settle any leftover next frame
+                    }
+                }
+            }
+            else if (IsStrafing)
+            {
+                // Face where the camera looks; move along the stick.
                 _targetRotation = CameraTransform.eulerAngles.y;
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
                     ref _rotationVelocity, StrafeRotationSmoothTime);
@@ -308,6 +366,7 @@ namespace CharacterControllerSystem
                 _animator.SetBool(_animStrafing, IsStrafing);
                 _animator.SetFloat(_animStrafeX, LocalVelocity.x);
                 _animator.SetFloat(_animStrafeZ, LocalVelocity.y);
+                _animator.SetInteger(_animStrafeTurn, _turnDir);
             }
         }
 

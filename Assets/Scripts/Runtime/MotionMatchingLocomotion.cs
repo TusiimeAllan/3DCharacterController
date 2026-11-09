@@ -67,6 +67,7 @@ namespace CharacterControllerSystem
         private static readonly int StrafingId = Animator.StringToHash("Strafing");
         private static readonly int StrafeXId = Animator.StringToHash("StrafeX");
         private static readonly int StrafeZId = Animator.StringToHash("StrafeZ");
+        private static readonly int StrafeTurnId = Animator.StringToHash("StrafeTurn");
         private const string LandingTag = "Landing";
 
         /// <summary>True while the Animator Controller plays a landing or roll (states tagged "Landing").</summary>
@@ -163,6 +164,7 @@ namespace CharacterControllerSystem
             _controllerLayer.SetBool(StrafingId, Controller.IsStrafing);
             _controllerLayer.SetFloat(StrafeXId, Controller.LocalVelocity.x);
             _controllerLayer.SetFloat(StrafeZId, Controller.LocalVelocity.y);
+            _controllerLayer.SetInteger(StrafeTurnId, Controller.StrafeTurn);
         }
 
         public void SetMode(bool useMotionMatching)

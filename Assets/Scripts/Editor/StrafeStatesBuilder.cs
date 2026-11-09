@@ -12,6 +12,8 @@ namespace CharacterControllerSystem.EditorTools
     ///   Locomotion <-> Strafe on the Strafing bool.
     /// Strafe gets a copy of every other exit Locomotion has (jump, fall, crouch, actions, emotes, push),
     /// so strafing never blocks them. Re-run after anything adds exits to Locomotion. Safe to re-run.
+    /// Standing turns: Strafe -> Strafe Turn L / R (Mixamo turn 90) while StrafeTurn is -1 / 1; the
+    /// controller rotates the body in step with the clip.
     /// Motion matching hands strafing to this state (its mocap has no sideways or backwards clips).
     /// </summary>
     public static class StrafeStatesBuilder
@@ -25,6 +27,8 @@ namespace CharacterControllerSystem.EditorTools
 
         private static readonly string[] ClipNames =
             { "Walk Forward", "Walk Left", "Walk Right", "Run Forward", "Run Left", "Run Right" };
+        private static readonly (string state, string clip, int dir)[] Turns =
+            { ("Strafe Turn L", "Turn Left 90", -1), ("Strafe Turn R", "Turn Right 90", 1) };
 
         [MenuItem("Tools/Character Controller/Add Strafe Mode")]
         public static void BuildDefault() =>
@@ -43,6 +47,7 @@ namespace CharacterControllerSystem.EditorTools
             Param(controller, "Strafing", AnimatorControllerParameterType.Bool);
             Param(controller, "StrafeX", AnimatorControllerParameterType.Float);
             Param(controller, "StrafeZ", AnimatorControllerParameterType.Float);
+            Param(controller, "StrafeTurn", AnimatorControllerParameterType.Int);
 
             var sm = controller.layers[0].stateMachine;
             var loco = State(sm, "Locomotion");
@@ -88,6 +93,19 @@ namespace CharacterControllerSystem.EditorTools
 
             strafe.motion = tree;
             strafe.writeDefaultValues = true;
+
+            for (int i = 0; i < Turns.Length; i++)
+            {
+                var clip = Load(Turns[i].clip);
+                if (clip == null)
+                {
+                    Debug.LogWarning($"{Tag} Turn clip {Turns[i].clip} missing, standing turns will slide.");
+                    continue;
+                }
+                var turn = State(sm, Turns[i].state) ?? sm.AddState(Turns[i].state, new Vector3(500f, -180f + i * 120f));
+                turn.motion = clip;
+                turn.writeDefaultValues = true;
+            }
             SyncExits(controller);
 
             EditorUtility.SetDirty(controller);
@@ -123,6 +141,24 @@ namespace CharacterControllerSystem.EditorTools
                 foreach (var c in src.conditions) t.AddCondition(c.mode, c.threshold, c.parameter);
             }
 
+            // Standing turns, after the copied exits so a jump or action still wins.
+            foreach (var (stateName, _, dir) in Turns)
+            {
+                var turn = State(sm, stateName);
+                if (turn == null) continue;
+                foreach (var t in turn.transitions.ToArray()) turn.RemoveTransition(t);
+                var into = strafe.AddTransition(turn);
+                into.hasExitTime = false;
+                into.duration = 0.1f;
+                into.AddCondition(AnimatorConditionMode.Equals, dir, "StrafeTurn");
+                // Ends when the controller finishes (or cancels) the turn; a chained turn can cut in.
+                var done = turn.AddTransition(strafe);
+                done.hasExitTime = false;
+                done.duration = 0.15f;
+                done.interruptionSource = TransitionInterruptionSource.Destination;
+                done.AddCondition(AnimatorConditionMode.NotEqual, dir, "StrafeTurn");
+            }
+
             var back = strafe.AddTransition(loco);
             back.hasExitTime = false;
             back.duration = ExitDuration;
@@ -134,6 +170,10 @@ namespace CharacterControllerSystem.EditorTools
             enter.AddCondition(AnimatorConditionMode.If, 0f, "Strafing");
             EditorUtility.SetDirty(controller);
         }
+
+        private static AnimationClip Load(string name) =>
+            AssetDatabase.LoadAllAssetRepresentationsAtPath(ClipPrefix + name + ".fbx").OfType<AnimationClip>()
+                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
 
         /// <summary>Loads a strafe clip and makes sure it is imported looping.</summary>
         private static AnimationClip LoadLooping(string name)
