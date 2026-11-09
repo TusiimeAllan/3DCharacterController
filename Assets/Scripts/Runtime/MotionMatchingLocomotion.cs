@@ -70,6 +70,7 @@ namespace CharacterControllerSystem
         public bool InLandingState { get; private set; }
 
         private AnimatorControllerPlayable _controllerLayer;
+        private CharacterActions _actions;
         private float _layerWeight = 1f;
         private bool _sprinting;
         private bool _calibrationReady;
@@ -95,6 +96,7 @@ namespace CharacterControllerSystem
             }
 
             EnsureSearchManager();
+            _actions = GetComponent<CharacterActions>();
 
             // We drive the animation from here, the controller only publishes its state.
             Controller.DriveAnimator = false;
@@ -119,10 +121,11 @@ namespace CharacterControllerSystem
             if (Keyboard.current != null && Keyboard.current[ToggleKey].wasPressedThisFrame) SetMode(!UseMotionMatching);
 #endif
             // Trajectory: same input and camera the controller moves with, at the speed it is moving.
-            Trajectory.SetInput(Inputs.move);
-            bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && Inputs.move != Vector2.zero;
+            Vector2 move = Controller.MovementLocked ? Vector2.zero : Inputs.move;
+            Trajectory.SetInput(move);
+            bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && move != Vector2.zero;
             if (sprinting != _sprinting) ApplyGait(sprinting);
-            Trajectory.MaxSpeed = sprinting ? Controller.SprintSpeed : Controller.MoveSpeed;
+            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale;
 
             if (!ResolveControllerLayer()) return;
 
@@ -132,7 +135,8 @@ namespace CharacterControllerSystem
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || InLandingState;
+                                 Controller.IsCrouching || InLandingState ||
+                                 (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
             _layerWeight = duration <= 0f ? target : Mathf.MoveTowards(_layerWeight, target, Time.deltaTime / duration);
@@ -185,6 +189,14 @@ namespace CharacterControllerSystem
             typeof(MxMSearchManager).GetField("m_maxAllowableDelay", flags)?.SetValue(manager, 2f);
             typeof(MxMSearchManager).GetField("m_expectedAnimatorCount", flags)?.SetValue(manager, 4);
             go.SetActive(true);
+        }
+
+        /// <summary>The hosted Animator Controller, for components that set its parameters (CharacterActions).</summary>
+        public bool TryGetControllerLayer(out AnimatorControllerPlayable layer)
+        {
+            bool ok = ResolveControllerLayer();
+            layer = _controllerLayer;
+            return ok;
         }
 
         /// <summary>MxM keeps the controller playable private; read it once it has been created.</summary>

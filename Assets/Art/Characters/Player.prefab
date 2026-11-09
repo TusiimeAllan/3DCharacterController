@@ -50,6 +50,7 @@ GameObject:
   - component: {fileID: 5163338868927937640}
   - component: {fileID: 5856110124234482876}
   - component: {fileID: 2188630293081521149}
+  - component: {fileID: 5671638418268805908}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -139,6 +140,8 @@ MonoBehaviour:
   jump: 0
   sprint: 0
   crouch: 0
+  interact: 0
+  attack: 0
   cursorLocked: 1
   cursorInputForLook: 1
   gamepadScheme: Gamepad
@@ -178,6 +181,9 @@ MonoBehaviour:
   _input: {fileID: 6784669559435407594}
   _animator: {fileID: 1831847853376694199}
   DriveAnimator: 1
+  LandingHoldTime: 0.35
+  MovementLocked: 0
+  SpeedScale: 1
 --- !u!114 &8954366063464921596
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -427,6 +433,35 @@ MonoBehaviour:
   EyesWeight: 1
   LookClamp: 0.55
   LookSmoothing: 6
+--- !u!114 &5671638418268805908
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c93261556efddd740821776999d58a9c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.CharacterActions
+  Controller: {fileID: 8766155822904003866}
+  Inputs: {fileID: 6784669559435407594}
+  MaxHealth: 100
+  HitDamage: 25
+  HitChestClip: {fileID: -245273357908900549, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  HitHeadClip: {fileID: -8534173349268677819, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  UpperBodyMask: {fileID: 31900000, guid: 2e9dd61c0c182834e93c430e3100d353, type: 2}
+  HitBlendIn: 0.05
+  MaxPushMass: 150
+  PushSpeed: 1.1
+  HitKey: 22
+  DieKey: 25
+  PickUpKey: 20
+  SitKey: 38
+  RepairKey: 32
+  DanceKey: 36
+  TalkKey: 34
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

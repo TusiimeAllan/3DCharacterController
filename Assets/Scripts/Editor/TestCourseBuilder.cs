@@ -65,6 +65,7 @@ namespace CharacterControllerSystem.EditorTools
                 UnevenGround();
                 PillarForest();
                 MovingPlatforms();
+                PushCrates();
 
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -314,6 +315,54 @@ namespace CharacterControllerSystem.EditorTools
             disc.transform.position = new Vector3(27f, 0.15f, -32f);
             AddMover(disc.gameObject, Vector3.zero, 0f, 0f, 30f);
             Label(g, "Turntable", new Vector3(27f, 1.6f, -28.6f), 180f);
+        }
+
+        private static void PushCrates()
+        {
+            var g = Group("14 Push Crates");
+            Sign(g, "PUSH CRATES", "Walk into a crate. Max push mass 150 kg", new Vector3(13f, 3.4f, -6f), 180f);
+            var crates = new (float size, float mass, string mat)[] { (0.8f, 30f, "Yellow"), (1.2f, 80f, "Orange"), (1.8f, 400f, "Red") };
+            for (int i = 0; i < crates.Length; i++)
+            {
+                var (size, mass, mat) = crates[i];
+                var pb = ShapeGenerator.GenerateCube(PivotLocation.Center, Vector3.one * size);
+                pb.name = $"Crate_{mass:0}kg";
+                Finish(pb, g, mat, convex: true);
+                float x = 10.5f + i * 2.7f;
+                pb.transform.position = new Vector3(x, size * 0.5f, -14f);
+                var rb = pb.gameObject.AddComponent<Rigidbody>();
+                rb.mass = mass;
+                rb.linearDamping = 1f;
+                rb.angularDamping = 2f;
+                rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+                rb.interpolation = RigidbodyInterpolation.Interpolate;
+                Label(g, mass > 150f ? $"{mass:0} kg (too heavy)" : $"{mass:0} kg", new Vector3(x, size + 0.6f, -14f), 180f);
+            }
+        }
+
+        /// <summary>Adds only the push crate station to the loaded OpenWorld scene, without saving it.</summary>
+        [MenuItem("Tools/Character Controller/Add Push Crates (OpenWorld)")]
+        public static void AddPushCratesOnly()
+        {
+            var scene = EditorSceneManager.GetSceneByPath(ScenePath);
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError($"{Tag} Open {ScenePath} first.");
+                return;
+            }
+            GameObject root = null;
+            foreach (var go in scene.GetRootGameObjects()) if (go.name == RootName) root = go;
+            if (root == null)
+            {
+                Debug.LogError($"{Tag} No {RootName} in the scene, run Build Test Course instead.");
+                return;
+            }
+            var old = root.transform.Find("14 Push Crates");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            CreateMaterials();
+            _root = root.transform;
+            PushCrates();
+            EditorSceneManager.MarkSceneDirty(scene);
         }
 
         // ================================================================ Boundary

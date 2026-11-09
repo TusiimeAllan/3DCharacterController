@@ -185,9 +185,12 @@ namespace CharacterControllerSystem
             _builtForScheme = CurrentScheme();
             if (LegendContainer == null || LegendEntryTemplate == null) return;
 
+            EnsureLegendRows();
             LegendEntryTemplate.SetActive(false);
+            var stale = new List<GameObject>();
             foreach (Transform child in LegendContainer)
-                if (child.gameObject != LegendEntryTemplate) Destroy(child.gameObject);
+                if (child.gameObject != LegendEntryTemplate) stale.Add(child.gameObject);
+            foreach (var go in stale) DestroyImmediate(go); // now, so the row layout never sees old entries
             _legend.Clear();
 
             bool pad = IsGamepad;
@@ -223,6 +226,127 @@ namespace CharacterControllerSystem
                 e.IsOn = () => grounding.Enabled;
                 _legend.Add(e);
             }
+
+            var acts = FindAnyObjectByType<CharacterActions>();
+            if (acts != null)
+            {
+#if ENABLE_INPUT_SYSTEM
+                foreach (var (name, label) in new[] { ("Interact", "Interact / stand up"), ("Attack", "Punch (combo)") })
+                {
+                    var action = actions?.FindAction(name);
+                    string key = BindingText(action, pad);
+                    if (string.IsNullOrEmpty(key)) continue;
+                    var e = AddLegendEntry(key, label);
+                    e.Action = action;
+                    _legend.Add(e);
+                }
+                if (!pad)
+                {
+                    void Add(Key k, string label, System.Func<bool> isOn = null)
+                    {
+                        var e = AddLegendEntry(k.ToString(), label);
+                        e.IsOn = isOn ?? (() => Keyboard.current != null && Keyboard.current[k].isPressed);
+                        _legend.Add(e);
+                    }
+                    Add(acts.HitKey, "Take hit");
+                    Add(acts.DieKey, "Die / revive", () => acts.IsDead);
+                    Add(acts.SitKey, "Sit", () => acts.IsSitting);
+                    Add(acts.PickUpKey, "Pick up");
+                    Add(acts.RepairKey, "Repair");
+                    Add(acts.DanceKey, "Dance", () => acts.Emote == CharacterActions.ActionId.Dance);
+                    Add(acts.TalkKey, "Talk", () => acts.Emote == CharacterActions.ActionId.Talk);
+                }
+#endif
+                var push = AddLegendEntry("Crate", "Walk into it to push");
+                push.IsOn = () => acts.IsPushing;
+                _legend.Add(push);
+            }
+
+            _legendFlowPending = true; // sizes are only reliable once the canvas has laid out
+        }
+
+        // The legend outgrew one line: it wraps into centred rows that fit the bar's width.
+        private float _legendSpacing = 32f;
+        private bool _legendFlowPending;
+        private float _legendFlowWidth = -1f;
+
+        private void LateUpdate()
+        {
+            if (LegendContainer == null) return;
+            float width = LegendContainer.rect.width;
+            if (!_legendFlowPending && Mathf.Abs(width - _legendFlowWidth) < 1f) return;
+            _legendFlowPending = false;
+            _legendFlowWidth = width;
+            FlowLegendIntoRows();
+        }
+
+        private void EnsureLegendRows()
+        {
+            var hlg = LegendContainer.GetComponent<UnityEngine.UI.HorizontalLayoutGroup>();
+            if (hlg == null) return; // already converted
+            _legendSpacing = Mathf.Min(hlg.spacing, 24f);
+            var padding = hlg.padding;
+            DestroyImmediate(hlg);
+
+            var vlg = LegendContainer.gameObject.AddComponent<UnityEngine.UI.VerticalLayoutGroup>();
+            vlg.padding = new RectOffset(padding.left, padding.right, 8, 8);
+            vlg.spacing = 6f;
+            vlg.childAlignment = TextAnchor.MiddleCenter;
+            vlg.childControlWidth = vlg.childControlHeight = true;
+            vlg.childForceExpandWidth = vlg.childForceExpandHeight = false;
+            var fit = LegendContainer.gameObject.AddComponent<UnityEngine.UI.ContentSizeFitter>();
+            fit.verticalFit = UnityEngine.UI.ContentSizeFitter.FitMode.PreferredSize;
+        }
+
+        private void FlowLegendIntoRows()
+        {
+            // Take every entry out of the old rows (in order), then rebuild the rows.
+            var entries = new List<RectTransform>();
+            var rows = new List<GameObject>();
+            foreach (Transform child in LegendContainer)
+            {
+                if (child.name.StartsWith("LegendRow_"))
+                {
+                    rows.Add(child.gameObject);
+                    foreach (Transform e in child) entries.Add((RectTransform)e);
+                }
+                else if (child.gameObject != LegendEntryTemplate && child.gameObject.activeSelf &&
+                         child.name.StartsWith("Legend_"))
+                {
+                    entries.Add((RectTransform)child);
+                }
+            }
+            foreach (var e in entries) e.SetParent(LegendContainer, false);
+            foreach (var r in rows) DestroyImmediate(r);
+
+            var vlg = LegendContainer.GetComponent<UnityEngine.UI.VerticalLayoutGroup>();
+            float maxWidth = LegendContainer.rect.width - (vlg != null ? vlg.padding.horizontal : 48f);
+            if (maxWidth <= 0f) maxWidth = 1800f;
+
+            RectTransform row = null;
+            float used = 0f;
+            int rowIndex = 0;
+            foreach (var e in entries)
+            {
+                // New text has no size until its mesh is generated.
+                foreach (var t in e.GetComponentsInChildren<TMP_Text>(true)) t.ForceMeshUpdate();
+                UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(e);
+                float w = UnityEngine.UI.LayoutUtility.GetPreferredWidth(e);
+                if (row == null || used + _legendSpacing + w > maxWidth)
+                {
+                    row = new GameObject($"LegendRow_{rowIndex++}", typeof(RectTransform)).GetComponent<RectTransform>();
+                    row.SetParent(LegendContainer, false);
+                    var h = row.gameObject.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>();
+                    h.spacing = _legendSpacing;
+                    h.childAlignment = TextAnchor.MiddleCenter;
+                    h.childControlWidth = h.childControlHeight = true;
+                    h.childForceExpandWidth = h.childForceExpandHeight = false;
+                    used = -_legendSpacing;
+                }
+                e.SetParent(row, false);
+                used += _legendSpacing + w;
+            }
+            UnityEngine.UI.LayoutRebuilder.ForceRebuildLayoutImmediate(LegendContainer);
         }
 
 #if ENABLE_INPUT_SYSTEM

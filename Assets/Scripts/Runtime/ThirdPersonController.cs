@@ -77,6 +77,12 @@ namespace CharacterControllerSystem
         [Tooltip("Seconds FallSpeed keeps the landing speed after touching down")]
         public float LandingHoldTime = 0.35f;
 
+        [Header("External Control")]
+        [Tooltip("Set by actions (death, sitting, interacting): ignore move, jump and crouch input")]
+        public bool MovementLocked;
+        [Tooltip("Multiplies the target speed, e.g. slower while pushing")]
+        public float SpeedScale = 1f;
+
         // player state
         private float _speed;
         private float _animationBlend;
@@ -181,6 +187,7 @@ namespace CharacterControllerSystem
 
         private void Crouch()
         {
+            if (MovementLocked) _input.crouch = IsCrouching; // keep the current stance while locked
             bool wantsCrouch = _input.crouch && Grounded;
 
             // Block stand-up if there is no headroom.
@@ -205,16 +212,17 @@ namespace CharacterControllerSystem
 
         private void Move()
         {
+            Vector2 move = MovementLocked ? Vector2.zero : _input.move;
             bool crouching = _input.crouch && Grounded;
-            float targetSpeed = crouching ? CrouchSpeed : (_input.sprint ? SprintSpeed : MoveSpeed);
+            float targetSpeed = (crouching ? CrouchSpeed : (_input.sprint ? SprintSpeed : MoveSpeed)) * SpeedScale;
 
-            if (_input.move == Vector2.zero) targetSpeed = 0.0f;
+            if (move == Vector2.zero) targetSpeed = 0.0f;
             TargetSpeed = targetSpeed;
 
             float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0.0f,
                 _controller.velocity.z).magnitude;
             float speedOffset = 0.1f;
-            float inputMagnitude = _input.move.magnitude > 1f ? 1f : _input.move.magnitude;
+            float inputMagnitude = move.magnitude > 1f ? 1f : move.magnitude;
             InputMagnitude = inputMagnitude;
 
             if (currentHorizontalSpeed < targetSpeed - speedOffset ||
@@ -232,9 +240,9 @@ namespace CharacterControllerSystem
             _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
             if (_animationBlend < 0.01f) _animationBlend = 0f;
 
-            Vector3 inputDirection = new Vector3(_input.move.x, 0.0f, _input.move.y).normalized;
+            Vector3 inputDirection = new Vector3(move.x, 0.0f, move.y).normalized;
 
-            if (_input.move != Vector2.zero && CameraTransform != null)
+            if (move != Vector2.zero && CameraTransform != null)
             {
                 _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
                     CameraTransform.eulerAngles.y;
@@ -260,6 +268,7 @@ namespace CharacterControllerSystem
             float dt = Time.deltaTime;
 
             // Consume the press into a short buffer so it is neither lost nor fired late.
+            if (MovementLocked) _input.jump = false;
             if (_input.jump)
             {
                 _jumpBufferDelta = JumpBufferTime;

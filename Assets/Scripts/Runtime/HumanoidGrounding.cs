@@ -60,9 +60,11 @@ namespace CharacterControllerSystem
 
         private Animator _animator;
         private MotionMatchingLocomotion _locomotion;
+        private CharacterActions _actions;
         private float _ikWeight;
         private float _pelvisOffset;
         private float _lookWeight;
+        private bool _posed;
         private Vector3 _lookTarget;
         private int _solvedFrame = -1;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
@@ -84,6 +86,7 @@ namespace CharacterControllerSystem
         {
             _animator = GetComponent<Animator>();
             _locomotion = GetComponent<MotionMatchingLocomotion>();
+            _actions = GetComponent<CharacterActions>();
             if (Controller == null) Controller = GetComponent<ThirdPersonController>();
             if (CameraTransform == null && Controller != null) CameraTransform = Controller.CameraTransform;
             if (Controller != null && GroundLayers == ~0) GroundLayers = Controller.GroundLayers;
@@ -110,8 +113,11 @@ namespace CharacterControllerSystem
 
             float dt = Time.deltaTime;
             // Rolls and landings move the feet on purpose; don't pin them to the ground then.
+            // Deaths, seats and full-body actions place the whole body themselves.
+            bool posed = _actions != null && _actions.isActiveAndEnabled && _actions.OverridesPose;
             bool grounded = (Controller == null || Controller.Grounded) &&
-                            (_locomotion == null || !_locomotion.InLandingState);
+                            (_locomotion == null || !_locomotion.InLandingState) && !posed;
+            _posed = posed;
             _ikWeight = Mathf.MoveTowards(_ikWeight, EnableGrounding && grounded ? 1f : 0f, dt * 6f);
 
             if (_ikWeight > 0.001f) SolveFeet(dt);
@@ -202,7 +208,7 @@ namespace CharacterControllerSystem
         private void SolveLookAt(float dt)
         {
             float target = 0f;
-            if (EnableLookAt && CameraTransform != null)
+            if (EnableLookAt && CameraTransform != null && !_posed)
             {
                 Vector3 camForward = CameraTransform.forward;
                 // Only look where the character could turn its head: not behind it.

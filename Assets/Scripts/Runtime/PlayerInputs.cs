@@ -17,6 +17,9 @@ namespace CharacterControllerSystem
         public bool jump;
         public bool sprint;
         public bool crouch;
+        [Tooltip("Set on press, cleared by whoever handles it (CharacterActions)")]
+        public bool interact;
+        public bool attack;
 
         [Header("Mouse Cursor Settings")]
         public bool cursorLocked = true;
@@ -84,6 +87,12 @@ namespace CharacterControllerSystem
         {
             // Toggle crouch on press.
             if (value.isPressed) crouch = !crouch;
+        }
+        public void OnInteract(InputValue value) { if (value.isPressed) interact = true; }
+        public void OnAttack(InputValue value)
+        {
+            // The click that re-locks a free cursor is not an attack.
+            if (value.isPressed && (cursorLocked || LookIsRate)) attack = true;
         }
 #endif
 
