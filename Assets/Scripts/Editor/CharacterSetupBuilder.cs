@@ -80,6 +80,7 @@ namespace CharacterControllerSystem.EditorTools
             ParkourBuilder.ApplyAnimator(controller); // hurdle, climb and drop states
             SlopeStatesBuilder.Apply(controller); // slide pose for slopes over the limit
             ClimbStatesBuilder.Apply(controller); // ledge hang, shimmy and ladder
+            SwimStatesBuilder.Apply(controller); // treading water and swimming
             Debug.Log($"{Tag} Animator built at {p.ControllerPath}", controller);
             return controller;
         }

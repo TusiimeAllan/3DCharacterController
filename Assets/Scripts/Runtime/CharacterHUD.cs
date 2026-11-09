@@ -261,6 +261,13 @@ namespace CharacterControllerSystem
                     c.IsOn = () => climbing.IsClimbing;
                     _legend.Add(c);
                 }
+                var swimming = parkour.GetComponent<SwimController>();
+                if (swimming != null)
+                {
+                    var w = AddLegendEntry("Water", "Swim, Shift faster, Jump at edge to climb out");
+                    w.IsOn = () => swimming.IsSwimming;
+                    _legend.Add(w);
+                }
             }
 
             var acts = FindAnyObjectByType<CharacterActions>();

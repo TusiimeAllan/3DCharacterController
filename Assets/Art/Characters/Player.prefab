@@ -53,6 +53,7 @@ GameObject:
   - component: {fileID: 5671638418268805908}
   - component: {fileID: 4888496659026386051}
   - component: {fileID: 2027868552323421969}
+  - component: {fileID: 3353249065561955869}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -542,6 +543,31 @@ MonoBehaviour:
   LadderDistance: 0.4
   LadderTopExit: 1.9
   AlignRate: 10
+--- !u!114 &3353249065561955869
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15a7a2e2f76050845927ac70e57bc1cc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.SwimController
+  EnableSwimming: 1
+  Controller: {fileID: 8766155822904003866}
+  Parkour: {fileID: 4888496659026386051}
+  SwimSpeed: 1.6
+  SwimSprintSpeed: 2.8
+  Acceleration: 3
+  TurnSmoothTime: 0.25
+  EnterDepth: 1.25
+  ExitDepth: 1.05
+  HeadAboveWater: 0.12
+  FloatDepth: 1.45
+  BobAmplitude: 0.03
+  MaxClimbOutHeight: 0.9
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

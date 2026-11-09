@@ -68,6 +68,7 @@ namespace CharacterControllerSystem.EditorTools
                 PushCrates();
                 Parkour();
                 LedgesAndLadder();
+                Pool();
 
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -398,6 +399,82 @@ namespace CharacterControllerSystem.EditorTools
             Part("Rail_R", new Vector3(-43.67f, 0f, -36f), new Vector3(-43.6f, 4.4f, -35.92f));
             for (int i = 1; i <= 13; i++)
                 Part($"Rung_{i}", new Vector3(-44.33f, i * 0.3f, -35.98f), new Vector3(-43.67f, i * 0.3f + 0.04f, -35.94f));
+        }
+
+        /// <summary>
+        /// A raised pool, 1.8 m of water in 2 m walls. Climb onto the wide west deck (run at it heading +x) and
+        /// walk off into the water; swim; walk out up the shallow ramp at the north-east, or Jump at a wall to
+        /// climb out.
+        /// </summary>
+        private static void Pool()
+        {
+            var g = Group("17 Pool");
+            Sign(g, "POOL", "Climb the deck, walk in. Jump at a wall to climb out", new Vector3(21.5f, 3.4f, -48.3f), -90f);
+            const float h = 2f, surface = 1.8f;
+            Box(g, "Deck_West", new Vector3(24f, 0f, -47.5f), new Vector3(25f, h, -38.5f), "Blue");
+            Box(g, "Wall_East", new Vector3(35f, 0f, -47.5f), new Vector3(35.5f, h, -38.5f), "Blue");
+            Box(g, "Wall_South", new Vector3(25f, 0f, -47.5f), new Vector3(35f, h, -47f), "Blue");
+            Box(g, "Wall_North", new Vector3(25f, 0f, -39f), new Vector3(35f, h, -38.5f), "Blue");
+            Wedge(g, "Beach", new Vector3(31f, 0f, -44.5f), 4f, 5.5f, 1.9f, "Sand");
+
+            var water = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            water.name = "Water";
+            water.transform.SetParent(g, false);
+            water.transform.position = new Vector3(30f, surface * 0.5f, -43f);
+            water.transform.localScale = new Vector3(10f, surface, 8f);
+            water.GetComponent<BoxCollider>().isTrigger = true;
+            water.GetComponent<Renderer>().sharedMaterial = WaterMaterial();
+            water.AddComponent<CharacterControllerSystem.WaterVolume>();
+        }
+
+        private static Material WaterMaterial()
+        {
+            string path = $"{ArtRoot}/Materials/Course_Water.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null)
+            {
+                EnsureFolder($"{ArtRoot}/Materials");
+                mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(mat, path);
+            }
+            // URP Lit, transparent alpha blend.
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            mat.SetColor("_BaseColor", new Color(0.15f, 0.45f, 0.75f, 0.45f));
+            mat.SetFloat("_Smoothness", 0.9f);
+            EditorUtility.SetDirty(mat);
+            return mat;
+        }
+
+        /// <summary>Adds only the pool station to the loaded OpenWorld scene, without saving it.</summary>
+        [MenuItem("Tools/Character Controller/Add Pool Station (OpenWorld)")]
+        public static void AddPoolOnly()
+        {
+            var scene = EditorSceneManager.GetSceneByPath(ScenePath);
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                Debug.LogError($"{Tag} Open {ScenePath} first.");
+                return;
+            }
+            GameObject root = null;
+            foreach (var go in scene.GetRootGameObjects()) if (go.name == RootName) root = go;
+            if (root == null)
+            {
+                Debug.LogError($"{Tag} No {RootName} in the scene, run Build Test Course instead.");
+                return;
+            }
+            var old = root.transform.Find("17 Pool");
+            if (old != null) Object.DestroyImmediate(old.gameObject);
+            CreateMaterials();
+            _root = root.transform;
+            Pool();
+            EditorSceneManager.MarkSceneDirty(scene);
         }
 
         /// <summary>Adds only the ledge and ladder station to the loaded OpenWorld scene, without saving it.</summary>

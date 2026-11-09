@@ -234,6 +234,7 @@ namespace CharacterControllerSystem
                     Vector3 l = pos + fwd * (d + 0.8f);
                     if (!Raycast(l + Vector3.up * 0.5f, Vector3.down, MaxDrop + 0.6f, out RaycastHit land)) return;
                     groundY = land.point.y;
+                    if (WaterVolume.IsDeep(land.point, 1f)) return; // deep water below: just fall in and swim
                     break;
                 }
                 previousDrop = drop;
