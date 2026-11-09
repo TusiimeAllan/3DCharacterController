@@ -59,6 +59,16 @@ namespace CharacterControllerSystem
         public float SlideHeight = 1.0f;
 
         public bool IsActive { get; private set; }
+        /// <summary>The move being performed, or null.</summary>
+        public ParkourMove CurrentMove => IsActive ? _move : null;
+        /// <summary>Progress through the current move, 0..1.</summary>
+        public float Progress => IsActive && _move != null ? Mathf.Clamp01(_elapsed / Mathf.Max(0.05f, _move.Duration)) : 0f;
+        /// <summary>True while the current move uses an edge the hands can hold (climbs, hurdles).</summary>
+        public bool HasLedge { get; private set; }
+        /// <summary>A point on the held edge (top of the wall face), the direction into the obstacle and its top.</summary>
+        public Vector3 LedgePoint { get; private set; }
+        public Vector3 LedgeFace { get; private set; }
+        public float LedgeTop => LedgePoint.y;
         public ParkourKind? CurrentKind => IsActive ? _move.Kind : (ParkourKind?)null;
         public event System.Action<bool> ToggledChanged;
 
@@ -211,6 +221,7 @@ namespace CharacterControllerSystem
             else return;
 
             float hgt = kind == ParkourKind.Hurdle ? height + 0.2f : height;
+            _pendingLedge = new Vector3(wall.point.x, top.point.y, wall.point.z);
             Begin(kind, pos, face, contact, hgt, endY);
         }
 
@@ -267,6 +278,7 @@ namespace CharacterControllerSystem
             _forwardScale = Mathf.Clamp(v.magnitude / Mathf.Max(0.5f, clipSpeed), 0.7f, 1.4f);
             _heightScale = 1f;
             _move = move;
+            HasLedge = false;
             _origin = transform.position;
             _forward = Flat(v);
             _startRotation = transform.rotation;
@@ -294,7 +306,7 @@ namespace CharacterControllerSystem
         /// Starts a move from where the character is now, ending at endY (e.g. climbing up from a ledge hang or
         /// off the top of a ladder). Returns false when the library has no move of that kind.
         /// </summary>
-        public bool BeginFromHere(ParkourKind kind, Vector3 face, float endY)
+        public bool BeginFromHere(ParkourKind kind, Vector3 face, float endY, Vector3? ledgePoint = null)
         {
             if (Library == null || IsActive) return false;
             var options = new List<int>();
@@ -303,11 +315,20 @@ namespace CharacterControllerSystem
             if (options.Count == 0) return false;
             int index = options[Random.Range(0, options.Count)];
             _move = Library.Moves[index];
+            HasLedge = ledgePoint.HasValue;
+            if (HasLedge)
+            {
+                LedgePoint = ledgePoint.Value;
+                LedgeFace = Flat(face);
+            }
             _origin = transform.position;
             _forward = Flat(face);
             _startRotation = transform.rotation;
             _forwardScale = 1f;
             _heightScale = Mathf.Max(0.3f, (endY - _origin.y) / Mathf.Max(0.05f, _move.Height));
+            _correctFrom = 0.4f;
+            if (_move.HasHold && ledgePoint.HasValue)
+                FitHold(_move, ledgePoint.Value.y - _origin.y, Vector3.Dot(ledgePoint.Value - _origin, Flat(face)));
             _endY = endY;
             _elapsed = 0f;
             _collide = false;
@@ -332,8 +353,17 @@ namespace CharacterControllerSystem
             if (scale > 1.3f) return; // still too far: keep running, try again next frame
             _forwardScale = Mathf.Max(0.35f, scale);
             _heightScale = height / Mathf.Max(0.05f, move.Height);
+            _correctFrom = 0.4f;
+            if (move.HasHold && kind != ParkourKind.Hurdle)
+                FitHold(move, height, Vector3.Dot(_pendingLedge - pos, face));
 
             _move = move;
+            HasLedge = kind == ParkourKind.Hurdle || kind == ParkourKind.ClimbMedium || kind == ParkourKind.ClimbHigh;
+            if (HasLedge)
+            {
+                LedgePoint = _pendingLedge;
+                LedgeFace = face;
+            }
             _origin = pos;
             _forward = face;
             _startRotation = transform.rotation;
@@ -362,7 +392,7 @@ namespace CharacterControllerSystem
             float y = _origin.y + s.y * _heightScale;
             // Land exactly on the measured surface.
             float endError = _endY - (_origin.y + end.y * _heightScale);
-            y += endError * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 1f, p));
+            y += endError * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(_correctFrom, 1f, p));
             // Crouches and rolls already lower the body in the pose; the capsule never goes below the ground.
             y = Mathf.Max(y, Mathf.Min(_origin.y, _endY));
             Vector3 position = _origin + _forward * (s.x * _forwardScale);
@@ -396,8 +426,28 @@ namespace CharacterControllerSystem
             if (p >= 1f) Finish();
         }
 
+        private Vector3 _pendingLedge;
+        private float _correctFrom = 0.4f;
+
+        /// <summary>
+        /// Stretches the recorded path so that, while the recording holds its edge, the hands are exactly on the
+        /// real one. With h the root's recorded rise at that moment, H the real and Hr the recorded edge height,
+        /// the vertical scale is 1 + (H - Hr) / h (and the same for the forward distance to the wall face).
+        /// The correction that lands the feet on top only starts once the hands have let go.
+        /// </summary>
+        private void FitHold(ParkourMove move, float ledgeHeight, float faceDistance)
+        {
+            const float palm = 0.035f, inset = 0.09f;
+            if (move.HoldRootRise > 0.05f)
+                _heightScale = Mathf.Clamp((ledgeHeight + palm - move.HoldHandHeight + move.HoldRootRise) / move.HoldRootRise, 0.3f, 3f);
+            if (move.HoldRootForward > 0.05f)
+                _forwardScale = Mathf.Clamp((faceDistance + inset - move.HoldHandForward + move.HoldRootForward) / move.HoldRootForward, 0.2f, 3f);
+            _correctFrom = Mathf.Clamp(move.HoldEnd, 0.4f, 0.95f);
+        }
+
         private void Finish()
         {
+            HasLedge = false;
             IsActive = false;
             _cooldown = Cooldown;
             if (_paramSet) SetParkourParam(0);

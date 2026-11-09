@@ -340,7 +340,8 @@ namespace CharacterControllerSystem
             SetBool(SwimmingId, false);
             SetFloat(SwimSpeedId, 0f);
             _cooldown = 1f;
-            if (Parkour.BeginFromHere(ParkourKind.ClimbFromHang, face, top.point.y)) return true;
+            if (Parkour.BeginFromHere(ParkourKind.ClimbFromHang, face, top.point.y,
+                    new Vector3(wall.point.x, top.point.y, wall.point.z))) return true;
             Exit();
             return false;
         }

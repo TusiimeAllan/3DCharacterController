@@ -230,7 +230,8 @@ namespace CharacterControllerSystem
             Current = State.None;
             SetBool(HangingId, false);
             SetFloat(HangMoveId, 0f);
-            if (Parkour == null || !Parkour.BeginFromHere(ParkourKind.ClimbFromHang, _face, _ledgeTop))
+            if (Parkour == null || !Parkour.BeginFromHere(ParkourKind.ClimbFromHang, _face, _ledgeTop,
+                    new Vector3(_edge.x, _ledgeTop, _edge.z)))
                 Detach(-_face * 0.15f);
         }
 
@@ -313,7 +314,7 @@ namespace CharacterControllerSystem
                 Current = State.None;
                 SetBool(OnLadderId, false);
                 SetFloat(LadderSpeedId, 0f);
-                if (Parkour == null || !Parkour.BeginFromHere(ParkourKind.ClimbFromHang, _face, _ladder.Top.y))
+                if (Parkour == null || !Parkour.BeginFromHere(ParkourKind.ClimbFromHang, _face, _ladder.Top.y, _ladder.Top))
                     Detach(Vector3.zero);
                 return;
             }

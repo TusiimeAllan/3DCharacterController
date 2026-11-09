@@ -43,6 +43,20 @@ namespace CharacterControllerSystem
         public float ContactDistance;
         [Tooltip("Root path over the window, evenly spaced in time: x = forward, y = up, relative to the start")]
         public Vector2[] Path;
+        [Tooltip("Progress window (x..y) in which the left / right hand holds the edge in the recording; empty = never")]
+        public Vector2 LeftHandContact, RightHandContact;
+
+        [Header("Recorded hold (where the hands are while they hold the edge)")]
+        [Tooltip("True when the recording holds an edge with the hands")]
+        public bool HasHold;
+        [Tooltip("Hands' height above the starting ground while holding (the recorded edge height)")]
+        public float HoldHandHeight;
+        [Tooltip("Hands' forward distance from the start while holding")]
+        public float HoldHandForward;
+        [Tooltip("How far the root has risen / travelled forward from the start at that moment")]
+        public float HoldRootRise, HoldRootForward;
+        [Tooltip("Progress at which the hands let go of the edge")]
+        public float HoldEnd;
 
         public float Duration => WindowEnd - WindowStart;
 

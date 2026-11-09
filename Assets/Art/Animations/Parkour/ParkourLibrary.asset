@@ -86,6 +86,14 @@ MonoBehaviour:
     - {x: 4.0929933, y: 1.301584}
     - {x: 4.1751366, y: 1.3054857}
     - {x: 4.259324, y: 1.3167675}
+    LeftHandContact: {x: 0.3483146, y: 0.5280899}
+    RightHandContact: {x: 0.3258427, y: 0.5168539}
+    HasHold: 1
+    HoldHandHeight: 1.5107561
+    HoldHandForward: 2.6743958
+    HoldRootRise: 0.75167453
+    HoldRootForward: 2.4883735
+    HoldEnd: 0.5280899
   - Name: Run_JumpUpMedium_2Hands_Run_Mirror
     Kind: 1
     Clip: {fileID: 7400000, guid: ed93358691a860b449bd416df7e12940, type: 2}
@@ -159,6 +167,14 @@ MonoBehaviour:
     - {x: 4.0929933, y: 1.301584}
     - {x: 4.1751366, y: 1.3054857}
     - {x: 4.259324, y: 1.3167675}
+    LeftHandContact: {x: 0.3483146, y: 0.5280899}
+    RightHandContact: {x: 0.3258427, y: 0.5168539}
+    HasHold: 1
+    HoldHandHeight: 1.5107561
+    HoldHandForward: 2.6743958
+    HoldRootRise: 0.75167453
+    HoldRootForward: 2.4883735
+    HoldEnd: 0.5280899
   - Name: Run_JumpUpHigh_Run
     Kind: 2
     Clip: {fileID: 7400000, guid: d96afd48d430f5c4aa95476abac653a1, type: 2}
@@ -232,6 +248,14 @@ MonoBehaviour:
     - {x: 3.1786053, y: 1.9215245}
     - {x: 3.2249422, y: 1.9471529}
     - {x: 3.275646, y: 1.9715233}
+    LeftHandContact: {x: 0.35955057, y: 0.8202247}
+    RightHandContact: {x: 0.3483146, y: 0.8426966}
+    HasHold: 1
+    HoldHandHeight: 2.410411
+    HoldHandForward: 2.8412118
+    HoldRootRise: 1.4245535
+    HoldRootForward: 2.7522738
+    HoldEnd: 0.8426966
   - Name: Run_JumpUpHigh_Run_Mirror
     Kind: 2
     Clip: {fileID: 7400000, guid: 7f01480fc6671a940bbd99c200740577, type: 2}
@@ -305,6 +329,14 @@ MonoBehaviour:
     - {x: 3.1786053, y: 1.9215245}
     - {x: 3.2249422, y: 1.9471529}
     - {x: 3.275646, y: 1.9715233}
+    LeftHandContact: {x: 0.35955057, y: 0.8202247}
+    RightHandContact: {x: 0.3483146, y: 0.8426966}
+    HasHold: 1
+    HoldHandHeight: 2.410411
+    HoldHandForward: 2.8412118
+    HoldRootRise: 1.4245535
+    HoldRootForward: 2.7522738
+    HoldEnd: 0.8426966
   - Name: RunJump_ToLeft_2
     Kind: 0
     Clip: {fileID: 7400000, guid: 23c67ff874dd5914a89c4ab8cbb21940, type: 2}
@@ -378,6 +410,14 @@ MonoBehaviour:
     - {x: 3.7660499, y: -0.13765287}
     - {x: 3.8178918, y: -0.101661265}
     - {x: 3.8701553, y: -0.06760687}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: RunJump_ToRight_2
     Kind: 0
     Clip: {fileID: 7400000, guid: 7c8aee7c7a83b3841a1e8b7054b3f8a8, type: 2}
@@ -451,6 +491,14 @@ MonoBehaviour:
     - {x: 3.7660499, y: -0.13765287}
     - {x: 3.8178918, y: -0.101661265}
     - {x: 3.8701553, y: -0.06760687}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: _209_Run_JumpDownLow_Run
     Kind: 3
     Clip: {fileID: 7400000, guid: 349336b087c253e409be206336ce19f1, type: 2}
@@ -524,6 +572,14 @@ MonoBehaviour:
     - {x: 3.9246624, y: -0.8199946}
     - {x: 3.9785466, y: -0.80366284}
     - {x: 4.02668, y: -0.78612435}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: _209_Run_JumpDownLow_Run_Mirror
     Kind: 3
     Clip: {fileID: 7400000, guid: c2f7256b2808f5e47b22dbb091c6fa81, type: 2}
@@ -597,6 +653,14 @@ MonoBehaviour:
     - {x: 3.9246624, y: -0.8199946}
     - {x: 3.9785466, y: -0.80366284}
     - {x: 4.02668, y: -0.78612435}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: Run_JumpDownLow_Roll_Run
     Kind: 3
     Clip: {fileID: 7400000, guid: 3d17581f1b8559944aab2c0f0f659079, type: 2}
@@ -670,6 +734,14 @@ MonoBehaviour:
     - {x: 5.4790883, y: -0.98659134}
     - {x: 5.563899, y: -0.9821523}
     - {x: 5.6318164, y: -0.98393023}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: Run_JumpDownLow_Roll_Run_Mirror
     Kind: 3
     Clip: {fileID: 7400000, guid: 97e15ecd72c48fe488fd7bfbaf0a84bd, type: 2}
@@ -743,6 +815,14 @@ MonoBehaviour:
     - {x: 5.4790883, y: -0.98659134}
     - {x: 5.563899, y: -0.9821523}
     - {x: 5.6318164, y: -0.98393023}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: Run_JumpDownHigh_Roll_Run
     Kind: 4
     Clip: {fileID: 7400000, guid: 3019e98dd24dccb42847eb06ba72b066, type: 2}
@@ -816,6 +896,14 @@ MonoBehaviour:
     - {x: 5.690536, y: -2.3189526}
     - {x: 5.7799525, y: -2.3190236}
     - {x: 5.870402, y: -2.3233812}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: Run_JumpDownHigh_Roll_Run_Mirror
     Kind: 4
     Clip: {fileID: 7400000, guid: 917765bcebdbf7b4dbc10a94a7bb76dd, type: 2}
@@ -889,6 +977,14 @@ MonoBehaviour:
     - {x: 5.690536, y: -2.3189526}
     - {x: 5.7799525, y: -2.3190236}
     - {x: 5.870402, y: -2.3233812}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: Run_JumpUpHigh_Run_FromHang
     Kind: 6
     Clip: {fileID: 7400000, guid: d96afd48d430f5c4aa95476abac653a1, type: 2}
@@ -962,6 +1058,14 @@ MonoBehaviour:
     - {x: 0.6017197, y: 0.76943994}
     - {x: 0.62925506, y: 0.7832706}
     - {x: 0.65817386, y: 0.79666233}
+    LeftHandContact: {x: 0, y: 0.6768904}
+    RightHandContact: {x: 0, y: 0.71727896}
+    HasHold: 1
+    HoldHandHeight: 1.3706497
+    HoldHandForward: 0.2562483
+    HoldRootRise: 0.64971375
+    HoldRootForward: 0.31887612
+    HoldEnd: 0.7078652
   - Name: Run_JumpUpHigh_Run_Mirror_FromHang
     Kind: 6
     Clip: {fileID: 7400000, guid: 7f01480fc6671a940bbd99c200740577, type: 2}
@@ -1035,6 +1139,14 @@ MonoBehaviour:
     - {x: 0.6017197, y: 0.76943994}
     - {x: 0.62925506, y: 0.7832706}
     - {x: 0.65817386, y: 0.79666233}
+    LeftHandContact: {x: 0, y: 0.6768904}
+    RightHandContact: {x: 0, y: 0.71727896}
+    HasHold: 1
+    HoldHandHeight: 1.3706497
+    HoldHandForward: 0.2562483
+    HoldRootRise: 0.64971375
+    HoldRootForward: 0.31887612
+    HoldEnd: 0.7078652
   - Name: RunSlide_ToRight_1
     Kind: 5
     Clip: {fileID: 7400000, guid: 56cea226eb8975442bb9bc30b732d8ac, type: 2}
@@ -1108,6 +1220,14 @@ MonoBehaviour:
     - {x: 6.2309732, y: 0.10152203}
     - {x: 6.3002095, y: 0.11686075}
     - {x: 6.369723, y: 0.12820953}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0
   - Name: RunSlide_ToRight_2
     Kind: 5
     Clip: {fileID: 7400000, guid: 2694b2c9b32c7904aa4b7f7f220fe1d9, type: 2}
@@ -1181,3 +1301,11 @@ MonoBehaviour:
     - {x: 6.9048796, y: 0.039865434}
     - {x: 7.0064974, y: 0.0388636}
     - {x: 7.109418, y: 0.030653894}
+    LeftHandContact: {x: 0, y: 0}
+    RightHandContact: {x: 0, y: 0}
+    HasHold: 0
+    HoldHandHeight: 0
+    HoldHandForward: 0
+    HoldRootRise: 0
+    HoldRootForward: 0
+    HoldEnd: 0

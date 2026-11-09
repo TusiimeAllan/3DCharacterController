@@ -75,12 +75,32 @@ namespace CharacterControllerSystem.EditorTools
                     Debug.LogWarning($"{Tag} Could not find the move in {clip.name}, skipped.");
                     continue;
                 }
+                FindHandContacts(move);
                 moves.Add(move);
             }
             if (moves.Count == 0)
             {
                 Debug.LogError($"{Tag} No parkour clips could be analysed.");
                 return null;
+            }
+
+            // A climb from a hang is the second half of a high climb: its hands hold the edge for the part of
+            // the full climb's hold that falls inside its shorter window.
+            foreach (var m in moves.Where(x => x.Kind == ParkourKind.ClimbFromHang))
+            {
+                var full = moves.FirstOrDefault(x => x.Kind == ParkourKind.ClimbHigh && x.Clip == m.Clip);
+                if (full == null) continue;
+                Vector2 Map(Vector2 w)
+                {
+                    if (w.y <= w.x) return Vector2.zero;
+                    float t0 = Mathf.Lerp(full.WindowStart, full.WindowEnd, w.x);
+                    float t1 = Mathf.Lerp(full.WindowStart, full.WindowEnd, w.y);
+                    float a0 = Mathf.InverseLerp(m.WindowStart, m.WindowEnd, t0);
+                    float a1 = Mathf.InverseLerp(m.WindowStart, m.WindowEnd, t1);
+                    return a1 - a0 > 0.05f ? new Vector2(a0, a1) : Vector2.zero;
+                }
+                m.LeftHandContact = Map(full.LeftHandContact);
+                m.RightHandContact = Map(full.RightHandContact);
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(LibraryPath));
@@ -94,7 +114,7 @@ namespace CharacterControllerSystem.EditorTools
             EditorUtility.SetDirty(library);
             AssetDatabase.SaveAssets();
             Debug.Log($"{Tag} Library: " + string.Join(", ", moves.Select(m =>
-                $"{m.Name} {m.Kind} h={m.Height:F2} contact={m.ContactDistance:F2} {m.Duration:F2}s")));
+                $"{m.Name} {m.Kind} h={m.Height:F2} contact={m.ContactDistance:F2} {m.Duration:F2}s hands L{m.LeftHandContact} R{m.RightHandContact} hold h={m.HoldHandHeight:F2} f={m.HoldHandForward:F2} rise={m.HoldRootRise:F2} ahead={m.HoldRootForward:F2}")));
             return library;
         }
 
@@ -230,6 +250,124 @@ namespace CharacterControllerSystem.EditorTools
             };
         }
 
+        /// <summary>
+        /// Plays the move on the X Bot and finds, for each hand, the longest stretch where it is still and up at
+        /// the obstacle top in the recording: that is when the hand holds the edge.
+        /// </summary>
+        private static void FindHandContacts(ParkourMove move)
+        {
+            if (move.Kind == ParkourKind.DropLow || move.Kind == ParkourKind.DropHigh || move.Kind == ParkourKind.Slide) return;
+            const string modelPath = "Assets/Art/Characters/XBot/X Bot.fbx";
+            var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<Avatar>().FirstOrDefault();
+            if (model == null || avatar == null) return;
+            var go = Object.Instantiate(model);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                var animator = go.GetComponent<Animator>();
+                if (animator == null) animator = go.AddComponent<Animator>();
+                animator.avatar = avatar;
+                animator.applyRootMotion = false;
+                const int n = 90;
+                var left = new Vector3[n];
+                var right = new Vector3[n];
+                float footStart = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    float t = Mathf.Lerp(move.WindowStart, move.WindowEnd, i / (n - 1f));
+                    move.Clip.SampleAnimation(go, t);
+                    left[i] = animator.GetBoneTransform(HumanBodyBones.LeftHand).position;
+                    right[i] = animator.GetBoneTransform(HumanBodyBones.RightHand).position;
+                    if (i == 0)
+                        footStart = Mathf.Min(animator.GetBoneTransform(HumanBodyBones.LeftFoot).position.y,
+                            animator.GetBoneTransform(HumanBodyBones.RightFoot).position.y) - 0.08f;
+                }
+                // Top of the obstacle in the recording's own coordinates.
+                float top = footStart + (move.Kind == ParkourKind.Hurdle ? move.Height - 0.2f : move.Height);
+                if (move.Kind == ParkourKind.ClimbFromHang) top = Mathf.Max(left.Max(h => h.y), right.Max(h => h.y)) - 0.05f;
+                float dt = move.Duration / (n - 1);
+                move.LeftHandContact = Window(left, top, dt);
+                move.RightHandContact = Window(right, top, dt);
+                RecordHold(move, left, right, footStart, n);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>
+        /// Where the hands and the root are while the hands hold the edge, in the recording, so the runtime can
+        /// stretch the path to put the hands exactly on a real edge at that moment.
+        /// </summary>
+        private static void RecordHold(ParkourMove move, Vector3[] left, Vector3[] right, float footStart, int n)
+        {
+            Vector2 l = move.LeftHandContact, r = move.RightHandContact;
+            bool hasL = l.y > l.x, hasR = r.y > r.x;
+            move.HasHold = hasL || hasR;
+            if (!move.HasHold) return;
+            // Frames where both hands hold (or the one that does).
+            float a = hasL && hasR ? Mathf.Max(l.x, r.x) : (hasL ? l.x : r.x);
+            float b = hasL && hasR ? Mathf.Min(l.y, r.y) : (hasL ? l.y : r.y);
+            if (b <= a) { a = Mathf.Min(hasL ? l.x : 1f, hasR ? r.x : 1f); b = Mathf.Max(l.y, r.y); }
+            move.HoldEnd = Mathf.Max(l.y, r.y);
+
+            var bindings = AnimationUtility.GetCurveBindings(move.Clip);
+            AnimationCurve Curve(string name) =>
+                AnimationUtility.GetEditorCurve(move.Clip, bindings.First(x => x.propertyName == name));
+            var cx = Curve("RootT.x"); var cy = Curve("RootT.y"); var cz = Curve("RootT.z");
+            Vector3 Root(float t) => new Vector3(cx.Evaluate(t), cy.Evaluate(t), cz.Evaluate(t));
+            Vector3 start = Root(move.WindowStart);
+            Vector3 travel = Root(move.WindowEnd) - start;
+            travel.y = 0f;
+            Vector3 fwd = travel.normalized;
+
+            float handH = 0f, handF = 0f, rise = 0f, ahead = 0f;
+            int count = 0;
+            for (int i = 0; i < n; i++)
+            {
+                float p = i / (n - 1f);
+                if (p < a || p > b) continue;
+                Vector3 hand;
+                bool lHold = hasL && p >= l.x && p <= l.y, rHold = hasR && p >= r.x && p <= r.y;
+                if (lHold && rHold) hand = (left[i] + right[i]) * 0.5f;
+                else if (lHold) hand = left[i];
+                else if (rHold) hand = right[i];
+                else continue;
+                Vector3 root = Root(Mathf.Lerp(move.WindowStart, move.WindowEnd, p)) - start;
+                handH += hand.y - footStart;
+                handF += Vector3.Dot(new Vector3(hand.x - start.x, 0f, hand.z - start.z), fwd);
+                rise += root.y;
+                ahead += Vector3.Dot(new Vector3(root.x, 0f, root.z), fwd);
+                count++;
+            }
+            if (count == 0) { move.HasHold = false; return; }
+            move.HoldHandHeight = handH / count;
+            move.HoldHandForward = handF / count;
+            move.HoldRootRise = rise / count;
+            move.HoldRootForward = ahead / count;
+        }
+
+        private static Vector2 Window(Vector3[] hand, float top, float dt)
+        {
+            int n = hand.Length, bestStart = -1, bestLen = 0, start = -1;
+            for (int i = 0; i < n; i++)
+            {
+                float speed = i == 0 ? (hand[1] - hand[0]).magnitude / dt : (hand[i] - hand[i - 1]).magnitude / dt;
+                bool holding = speed < 1.0f && hand[i].y > top - 0.45f && hand[i].y < top + 0.6f;
+                if (holding && start < 0) start = i;
+                if ((!holding || i == n - 1) && start >= 0)
+                {
+                    int end = holding ? i : i - 1;
+                    if (end - start + 1 > bestLen) { bestLen = end - start + 1; bestStart = start; }
+                    start = -1;
+                }
+            }
+            if (bestLen < 4) return Vector2.zero; // a brush, not a hold
+            return new Vector2(bestStart / (n - 1f), (bestStart + bestLen - 1) / (n - 1f));
+        }
+
         private static int FirstIndex(Vector3[] pos, int from, System.Func<Vector3, bool> test)
         {
             for (int i = Mathf.Max(0, from); i < pos.Length; i++) if (test(pos[i])) return i;
@@ -301,6 +439,10 @@ namespace CharacterControllerSystem.EditorTools
                 var pk = root.GetComponent<ParkourController>() ?? root.AddComponent<ParkourController>();
                 pk.Library = library;
                 pk.Controller = root.GetComponent<ThirdPersonController>();
+                var solver = root.GetComponent<BodyContactSolver>();
+                if (solver == null) solver = root.AddComponent<BodyContactSolver>();
+                solver.Controller = pk.Controller;
+                solver.Parkour = pk;
                 PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
                 Debug.Log($"{Tag} ParkourController on {PlayerPrefab}.");
             }
