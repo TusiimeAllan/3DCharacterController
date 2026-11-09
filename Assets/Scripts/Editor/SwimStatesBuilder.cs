@@ -84,14 +84,47 @@ namespace CharacterControllerSystem.EditorTools
             Debug.Log($"{Tag} Swim state added.");
         }
 
+        private const string SplashMaterialPath = "Assets/Art/Effects/WaterSplash.mat";
+
+        /// <summary>Soft round droplet material for splash particles (URP Particles/Unlit, alpha blended).</summary>
+        public static Material SplashMaterial()
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(SplashMaterialPath);
+            if (mat == null)
+            {
+                System.IO.Directory.CreateDirectory("Assets/Art/Effects");
+                mat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+                AssetDatabase.CreateAsset(mat, SplashMaterialPath);
+            }
+            mat.SetFloat("_Surface", 1f);
+            mat.SetFloat("_Blend", 0f);
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            var dot = AssetDatabase.GetBuiltinExtraResource<Texture2D>("Default-Particle.psd");
+            if (dot != null) mat.SetTexture("_BaseMap", dot);
+            mat.SetColor("_BaseColor", new Color(0.9f, 0.96f, 1f, 0.9f));
+            EditorUtility.SetDirty(mat);
+            AssetDatabase.SaveAssets();
+            return mat;
+        }
+
         public static void SetUpPlayer()
         {
             var root = PrefabUtility.LoadPrefabContents(PlayerPrefab);
             try
             {
-                var swim = root.GetComponent<SwimController>() ?? root.AddComponent<SwimController>();
+                var swim = root.GetComponent<SwimController>();
+                if (swim == null) swim = root.AddComponent<SwimController>();
                 swim.Controller = root.GetComponent<ThirdPersonController>();
                 swim.Parkour = root.GetComponent<ParkourController>();
+                var effects = root.GetComponent<WaterEffects>();
+                if (effects == null) effects = root.AddComponent<WaterEffects>();
+                effects.SplashMaterial = SplashMaterial();
+                swim.Effects = effects;
                 PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
                 Debug.Log($"{Tag} SwimController on {PlayerPrefab}.");
             }

@@ -22,6 +22,9 @@ namespace CharacterControllerSystem
         public bool attack;
         [Tooltip("Held: face the camera and move sideways / backwards (read every frame from the Strafe action)")]
         public bool strafe;
+        [Tooltip("Crouch / Jump buttons currently held (polled), for actions that need a hold, e.g. diving")]
+        public bool crouchHeld;
+        public bool jumpHeld;
 
         [Header("Mouse Cursor Settings")]
         public bool cursorLocked = true;
@@ -34,6 +37,8 @@ namespace CharacterControllerSystem
         private PlayerInput _playerInput;
         private InputAction _strafeAction;
         private InputAction _sprintAction;
+        private InputAction _crouchAction;
+        private InputAction _jumpAction;
         private bool _strafeLatched;
 #endif
 
@@ -58,6 +63,8 @@ namespace CharacterControllerSystem
             _strafeAction = _playerInput != null && _playerInput.actions != null
                 ? _playerInput.actions.FindAction("Strafe")
                 : null;
+            _crouchAction = _playerInput != null && _playerInput.actions != null ? _playerInput.actions.FindAction("Crouch") : null;
+            _jumpAction = _playerInput != null && _playerInput.actions != null ? _playerInput.actions.FindAction("Jump") : null;
             _sprintAction = _playerInput != null && _playerInput.actions != null
                 ? _playerInput.actions.FindAction("Sprint")
                 : null;
@@ -68,6 +75,8 @@ namespace CharacterControllerSystem
             // Sprint is a hold: poll it, because a Button action with no release interaction does not always
             // send a message on release (the character kept sprinting after letting go).
             if (_sprintAction != null && _sprintAction.enabled) sprint = _sprintAction.IsPressed();
+            if (_crouchAction != null && _crouchAction.enabled) crouchHeld = _crouchAction.IsPressed();
+            if (_jumpAction != null && _jumpAction.enabled) jumpHeld = _jumpAction.IsPressed();
 
             // Mouse: hold (polled, so it never misses a release). Gamepad: a stick click toggles it, like a lock-on.
             // Right mouse on a free cursor is not a strafe.

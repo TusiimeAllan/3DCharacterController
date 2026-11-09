@@ -152,7 +152,7 @@ namespace CharacterControllerSystem
             Trajectory.SetInput(move);
             bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && move != Vector2.zero;
             if (sprinting != _sprinting) ApplyGait(sprinting);
-            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale * Controller.SlopeSpeedFactor;
+            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale * Controller.SlopeSpeedFactor * Controller.WadeSpeedFactor;
 
             // MxM's angular error warping turns the body towards the travel direction. While strafing the
             // controller keeps it facing the camera instead, so the two would fight.

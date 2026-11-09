@@ -127,6 +127,8 @@ namespace CharacterControllerSystem
         public float SlopeAlongMove { get; private set; }
         /// <summary>Speed multiplier from the slope being walked (uphill slower, downhill a little faster).</summary>
         public float SlopeSpeedFactor { get; private set; } = 1f;
+        /// <summary>Speed multiplier set from outside for wading through water (1 = dry).</summary>
+        [System.NonSerialized] public float WadeSpeedFactor = 1f;
         /// <summary>True while sliding down a slope steeper than the CharacterController's slope limit.</summary>
         public bool IsSlidingOnSlope { get; private set; }
 
@@ -347,7 +349,7 @@ namespace CharacterControllerSystem
             IsSlidingOnSlope = steep || (_steepGrace > 0f && !(Grounded && GroundAngle <= _controller.slopeLimit));
             SlopeSpeedFactor = IsSlidingOnSlope ? 1f
                 : 1f - UphillSlowdown * Mathf.Max(0f, SlopeAlongMove) + DownhillSpeedup * Mathf.Max(0f, -SlopeAlongMove);
-            targetSpeed *= SlopeSpeedFactor;
+            targetSpeed *= SlopeSpeedFactor * WadeSpeedFactor;
 
             if (move == Vector2.zero) targetSpeed = 0.0f;
             TargetSpeed = targetSpeed;
