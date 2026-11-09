@@ -61,6 +61,24 @@ namespace CharacterControllerSystem.EditorTools
 
             string niceName = DeriveClipName(assetPath);
 
+            // LaFAN1 mocap for motion matching: root motion from the body (centre of mass and body
+            // orientation, like the MxM demo mocap) so trajectories can be extracted; the FBX root node
+            // exported from Blender never moves.
+            if (assetPath.Replace('\\', '/').Contains("/LaFAN1/"))
+            {
+                foreach (var c in clips)
+                {
+                    if (clips.Length == 1) c.name = niceName;
+                    c.loopTime = false;
+                    c.keepOriginalOrientation = false;
+                    c.keepOriginalPositionXZ = false;
+                    c.keepOriginalPositionY = true;
+                    c.lockRootRotation = c.lockRootHeightY = c.lockRootPositionXZ = false;
+                }
+                importer.clipAnimations = clips;
+                return;
+            }
+
             for (int i = 0; i < clips.Length; i++)
             {
                 if (clips.Length == 1) clips[i].name = niceName;
