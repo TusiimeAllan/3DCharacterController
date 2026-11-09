@@ -29,8 +29,12 @@ namespace CharacterControllerSystem
         public float JumpHeight = 1.2f;
         [Tooltip("Custom gravity. Engine default is -9.81")]
         public float Gravity = -15.0f;
-        [Tooltip("Time required to pass before being able to jump again")]
+        [Tooltip("Time required to pass after a jump before being able to jump again")]
         public float JumpTimeout = 0.50f;
+        [Tooltip("A jump pressed this long before landing still triggers on landing")]
+        public float JumpBufferTime = 0.15f;
+        [Tooltip("Grace period after walking off a ledge during which a jump is still allowed")]
+        public float CoyoteTime = 0.15f;
         [Tooltip("Time required to pass before entering the fall state")]
         public float FallTimeout = 0.15f;
 
@@ -66,6 +70,8 @@ namespace CharacterControllerSystem
         // timeout deltas
         private float _jumpTimeoutDelta;
         private float _fallTimeoutDelta;
+        private float _jumpBufferDelta;
+        private float _coyoteDelta;
 
         // animator parameter hashes
         private int _animSpeed;
@@ -105,7 +111,7 @@ namespace CharacterControllerSystem
             _hasAnimator = _animator != null;
             AssignAnimationIDs();
 
-            _jumpTimeoutDelta = JumpTimeout;
+            _jumpTimeoutDelta = 0f;
             _fallTimeoutDelta = FallTimeout;
 
             _controller.height = StandingHeight;
@@ -226,8 +232,24 @@ namespace CharacterControllerSystem
 
         private void JumpAndGravity()
         {
+            float dt = Time.deltaTime;
+
+            // Consume the press into a short buffer so it is neither lost nor fired late.
+            if (_input.jump)
+            {
+                _jumpBufferDelta = JumpBufferTime;
+                _input.jump = false;
+            }
+            else if (_jumpBufferDelta > 0f)
+            {
+                _jumpBufferDelta -= dt;
+            }
+
+            if (_jumpTimeoutDelta > 0f) _jumpTimeoutDelta -= dt;
+
             if (Grounded)
             {
+                _coyoteDelta = CoyoteTime;
                 _fallTimeoutDelta = FallTimeout;
 
                 if (_hasAnimator)
@@ -237,28 +259,28 @@ namespace CharacterControllerSystem
                 }
 
                 if (_verticalVelocity < 0.0f) _verticalVelocity = -2f;
-
-                bool canJump = !(_input.crouch); // no jumping while crouched
-                if (_input.jump && _jumpTimeoutDelta <= 0.0f && canJump)
-                {
-                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-                    if (_hasAnimator) _animator.SetBool(_animJump, true);
-                }
-
-                if (_jumpTimeoutDelta >= 0.0f) _jumpTimeoutDelta -= Time.deltaTime;
             }
             else
             {
-                _jumpTimeoutDelta = JumpTimeout;
+                if (_coyoteDelta > 0f) _coyoteDelta -= dt;
 
-                if (_fallTimeoutDelta >= 0.0f) _fallTimeoutDelta -= Time.deltaTime;
+                if (_fallTimeoutDelta >= 0.0f) _fallTimeoutDelta -= dt;
                 else if (_hasAnimator) _animator.SetBool(_animFreeFall, true);
-
-                _input.jump = false;
             }
 
-            if (_verticalVelocity < _terminalVelocity)
-                _verticalVelocity += Gravity * Time.deltaTime;
+            bool canJump = _coyoteDelta > 0f && _jumpBufferDelta > 0f && _jumpTimeoutDelta <= 0f &&
+                           !_input.crouch; // no jumping while crouched
+            if (canJump)
+            {
+                _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+                _jumpBufferDelta = 0f;
+                _coyoteDelta = 0f;
+                _jumpTimeoutDelta = JumpTimeout;
+                if (_hasAnimator) _animator.SetBool(_animJump, true);
+            }
+
+            // Falling velocity is negative, so clamp against the negative terminal velocity.
+            _verticalVelocity = Mathf.Max(_verticalVelocity + Gravity * dt, -_terminalVelocity);
         }
 
         private void OnDrawGizmosSelected()

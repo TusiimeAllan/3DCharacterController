@@ -22,11 +22,55 @@ namespace CharacterControllerSystem
         public bool cursorLocked = true;
         public bool cursorInputForLook = true;
 
+        [Tooltip("Control scheme whose look input is a stick rate rather than a mouse delta")]
+        public string gamepadScheme = "Gamepad";
+
 #if ENABLE_INPUT_SYSTEM
+        private PlayerInput _playerInput;
+#endif
+
+        /// <summary>True when look comes from a stick (a rate that must be scaled by deltaTime).</summary>
+        public bool LookIsRate
+        {
+            get
+            {
+#if ENABLE_INPUT_SYSTEM
+                return _playerInput != null && _playerInput.currentControlScheme == gamepadScheme;
+#else
+                return false;
+#endif
+            }
+        }
+
+#if ENABLE_INPUT_SYSTEM
+        private void Awake()
+        {
+            _playerInput = GetComponent<PlayerInput>();
+            if (_playerInput == null) _playerInput = GetComponentInParent<PlayerInput>();
+        }
+
+        private void Update()
+        {
+            // Escape releases the cursor, clicking back into the game locks it again.
+            if (cursorLocked && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                cursorLocked = false;
+                SetCursorState(false);
+            }
+            else if (!cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            {
+                cursorLocked = true;
+                SetCursorState(true);
+            }
+        }
+
         public void OnMove(InputValue value) => MoveInput(value.Get<Vector2>());
         public void OnLook(InputValue value)
         {
-            if (cursorInputForLook) LookInput(value.Get<Vector2>());
+            Vector2 v = value.Get<Vector2>();
+            // Ignore mouse look while the cursor is free so moving it to other windows does not spin the camera.
+            if (!LookIsRate && (!cursorInputForLook || !cursorLocked)) v = Vector2.zero;
+            LookInput(v);
         }
         public void OnJump(InputValue value) => JumpInput(value.isPressed);
         public void OnSprint(InputValue value) => SprintInput(value.isPressed);
@@ -42,11 +86,15 @@ namespace CharacterControllerSystem
         public void JumpInput(bool newJumpState) => jump = newJumpState;
         public void SprintInput(bool newSprintState) => sprint = newSprintState;
 
-        private void OnApplicationFocus(bool hasFocus) => SetCursorState(cursorLocked);
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus) SetCursorState(cursorLocked);
+        }
 
         private void SetCursorState(bool locked)
         {
             Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !locked;
         }
     }
 }
