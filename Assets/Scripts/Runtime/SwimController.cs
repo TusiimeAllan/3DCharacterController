@@ -391,6 +391,12 @@ namespace CharacterControllerSystem
                 _animator.bodyRotation = Quaternion.AngleAxis(_pitch, transform.right) * _animator.bodyRotation;
         }
 
+        /// <summary>Stops swimming at once (e.g. before a teleport).</summary>
+        public void Cancel()
+        {
+            if (IsSwimming) Exit();
+        }
+
         private void Enter(WaterVolume water)
         {
             _water = water;

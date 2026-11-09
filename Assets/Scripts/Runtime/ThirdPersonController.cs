@@ -101,6 +101,10 @@ namespace CharacterControllerSystem
         public float StrafeSprintSpeed = 4.2f;
         [Tooltip("Speed multiplier when moving straight backwards while strafing")]
         [Range(0.3f, 1f)] public float StrafeBackwardScale = 0.7f;
+        [Tooltip("Fastest the body may turn when walking or running (deg/s); people can't spin faster")]
+        public float MaxTurnSpeed = 540f;
+        [Tooltip("Fastest the body may turn while strafing (deg/s)")]
+        public float StrafeMaxTurnSpeed = 720f;
         [Tooltip("How fast the character turns to the camera while strafing")]
         [Range(0.0f, 0.3f)] public float StrafeRotationSmoothTime = 0.05f;
         [Tooltip("Standing still while strafing, step around with the turn clips instead of sliding the feet")]
@@ -422,6 +426,7 @@ namespace CharacterControllerSystem
                 _targetRotation = CameraTransform.eulerAngles.y;
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
                     ref _rotationVelocity, StrafeRotationSmoothTime);
+                rotation = Mathf.MoveTowardsAngle(transform.eulerAngles.y, rotation, StrafeMaxTurnSpeed * Time.deltaTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
             }
             else if (move != Vector2.zero && CameraTransform != null)
@@ -429,6 +434,7 @@ namespace CharacterControllerSystem
                 _targetRotation = _moveRotation;
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
                     ref _rotationVelocity, RotationSmoothTime);
+                rotation = Mathf.MoveTowardsAngle(transform.eulerAngles.y, rotation, MaxTurnSpeed * Time.deltaTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
             }
 
@@ -445,8 +451,8 @@ namespace CharacterControllerSystem
                 // Steer across the slope, but never climb it; face down the slope.
                 float climbing = Vector3.Dot(planarVelocity, -flatDownhill);
                 if (climbing > 0f) planarVelocity += flatDownhill * climbing;
-                transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flatDownhill),
-                    1f - Mathf.Exp(-8f * Time.deltaTime));
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(flatDownhill),
+                    MaxTurnSpeed * 0.5f * Time.deltaTime);
             }
             else
             {

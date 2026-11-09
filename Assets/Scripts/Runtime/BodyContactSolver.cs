@@ -91,6 +91,7 @@ namespace CharacterControllerSystem
             _probe = go.AddComponent<SphereCollider>();
             _probe.isTrigger = true;
             _probe.radius = 0.01f; // only its shape is used, at positions passed to ComputePenetration
+            _elbowPenalty = p => InsideObstacle(p, ElbowRadius, out _);
         }
 
         private void LateUpdate()
@@ -101,7 +102,14 @@ namespace CharacterControllerSystem
             if (EnableDepenetration) Depenetrate(dt);
             if (EnableHandPlanting)
             {
+                if (_climb != null && _climb.Current == ClimbController.State.Ladder && _climb.CurrentLadder != null)
+                {
+                    LadderHand(ref _left, _climb.CurrentLadder, dt);
+                    LadderHand(ref _right, _climb.CurrentLadder, dt);
+                    return;
+                }
                 bool ledge = Parkour != null && Parkour.IsActive && Parkour.HasLedge;
+                _obstacle = ledge ? FindObstacle() : null;
                 var move = ledge ? Parkour.CurrentMove : null;
                 float p = ledge ? Parkour.Progress : 0f;
                 SolveHand(ref _left, ledge, ContactWeight(move != null ? move.LeftHandContact : Vector2.zero, p), p, dt);
@@ -114,7 +122,7 @@ namespace CharacterControllerSystem
         private bool PosedFromRecording()
         {
             if (_swim != null && _swim.IsSwimming) return false; // floating: water, not floors
-            if (_climb != null && _climb.IsClimbing) return false; // hands/feet meet the wall on purpose
+            if (_climb != null && _climb.IsClimbing) return true; // keep knees and chest out of the wall
             return Controller.ExternallyDriven || Controller.IsSlidingOnSlope ||
                    (_mm != null && _mm.InLandingState) ||
                    (_actions != null && _actions.isActiveAndEnabled && _actions.IsDead);
@@ -127,7 +135,7 @@ namespace CharacterControllerSystem
             if (hips != null && PosedFromRecording())
             {
                 // Deepest push up, and the strongest horizontal push, over all probes.
-                float up = 0f;
+                float up = 0f, down = 0f;
                 Vector3 side = Vector3.zero;
                 foreach (var (bone, radius) in BodyProbes)
                 {
@@ -150,11 +158,13 @@ namespace CharacterControllerSystem
                         if (!Physics.ComputePenetration(_probe, p, Quaternion.identity, other,
                                 other.transform.position, other.transform.rotation, out Vector3 dir, out float dist)) continue;
                         Vector3 v = dir * dist;
+                        if (dir.y < -0.5f) down = Mathf.Max(down, -v.y); // a ceiling pushes down
                         Vector3 h = new Vector3(v.x, 0f, v.z); // walls only: floors are handled from above
                         if (h.sqrMagnitude > side.sqrMagnitude) side = h;
                     }
                 }
-                wanted = Vector3.ClampMagnitude(side + Vector3.up * up, MaxPush);
+                float vertical = up > 0.001f ? up : -down; // a floor wins over a ceiling
+                wanted = Vector3.ClampMagnitude(side + Vector3.up * vertical, MaxPush);
             }
 
             // Push out at once (never show the overlap), ease back when it clears.
@@ -168,6 +178,20 @@ namespace CharacterControllerSystem
         }
 
         // ---------------------------------------------------------------- hands
+
+        /// <summary>On a ladder: bring each hand onto the rungs' plane (the feet set where the body is).</summary>
+        private void LadderHand(ref Hand hand, Ladder ladder, float dt)
+        {
+            var upper = _animator.GetBoneTransform(hand.Upper);
+            var lower = _animator.GetBoneTransform(hand.Lower);
+            var end = _animator.GetBoneTransform(hand.End);
+            if (upper == null || lower == null || end == null) return;
+            Vector3 animated = end.position;
+            Vector3 plane = ladder.Bottom + ladder.Out * 0.03f;
+            Vector3 target = animated - ladder.Out * Vector3.Dot(animated - plane, ladder.Out);
+            hand.Weight = Mathf.MoveTowards(hand.Weight, 1f, PlantInRate * dt);
+            TwoBoneIK(upper, lower, end, Vector3.Lerp(animated, target, hand.Weight));
+        }
 
         /// <summary>1 inside the recorded hold window, easing in and out over its edges; -1 if the move has none.</summary>
         private static float ContactWeight(Vector2 window, float p)
@@ -201,7 +225,7 @@ namespace CharacterControllerSystem
                 }
                 if (contact <= 0f) hand.Planted = false;
                 hand.Weight = contact;
-                if (hand.Weight > 0.001f) TwoBoneIK(upper, lower, end, Vector3.Lerp(animated, hand.Target, hand.Weight));
+                ArmOutside(upper, lower, end, Vector3.Lerp(animated, hand.Target, hand.Weight));
                 return;
             }
             if (ledgeActive && progress >= PlantWindow.x && progress <= PlantWindow.y)
@@ -235,15 +259,59 @@ namespace CharacterControllerSystem
 
             hand.Weight = Mathf.MoveTowards(hand.Weight, hand.Planted ? 1f : 0f,
                 (hand.Planted ? PlantInRate : PlantOutRate) * dt);
-            if (hand.Weight <= 0.001f) return;
-            TwoBoneIK(upper, lower, end, Vector3.Lerp(animated, hand.Target, hand.Weight));
+            if (!ledgeActive && hand.Weight <= 0.001f) return;
+            ArmOutside(upper, lower, end, Vector3.Lerp(animated, hand.Target, hand.Weight));
         }
+
+        // ---------------------------------------------------------------- arms vs the obstacle
+
+        private Collider _obstacle;
+
+        /// <summary>The collider the current move climbs or vaults (found just inside its edge).</summary>
+        private Collider FindObstacle()
+        {
+            Vector3 inside = Parkour.LedgePoint + Parkour.LedgeFace * 0.06f - Vector3.up * 0.06f;
+            int n = Physics.OverlapSphereNonAlloc(inside, 0.03f, _overlaps, Controller.GroundLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+                if (_overlaps[i] != null && !_overlaps[i].transform.IsChildOf(transform)) return _overlaps[i];
+            return null;
+        }
+
+        /// <summary>How far a sphere at p sits inside the obstacle (0 when clear), and the way out.</summary>
+        private float InsideObstacle(Vector3 p, float radius, out Vector3 way)
+        {
+            way = Vector3.zero;
+            if (_obstacle == null) return 0f;
+            _probe.radius = radius;
+            if (!Physics.ComputePenetration(_probe, p, Quaternion.identity, _obstacle,
+                    _obstacle.transform.position, _obstacle.transform.rotation, out Vector3 dir, out float dist)) return 0f;
+            way = dir;
+            return dist;
+        }
+
+        /// <summary>
+        /// Puts the hand at target with the whole arm outside the obstacle: the wrist is pushed out of the surface,
+        /// and the elbow is swung around the shoulder-to-wrist axis (where it is free to go without moving the
+        /// hand) to the nearest place outside. The recordings were made against differently sized boxes, so
+        /// without this the forearm goes through the corner.
+        /// </summary>
+        private void ArmOutside(Transform upper, Transform lower, Transform end, Vector3 target)
+        {
+            float d = InsideObstacle(target, HandRadius, out Vector3 way);
+            if (d > 0f) target += way * d;
+            if (_obstacle == null && (target - end.position).sqrMagnitude < 1e-8f) return;
+            TwoBoneIK(upper, lower, end, target, _obstacle != null ? _elbowPenalty : null);
+        }
+
+        private const float HandRadius = 0.035f, ElbowRadius = 0.05f;
+        private System.Func<Vector3, float> _elbowPenalty;
 
         /// <summary>
         /// Analytic two-bone IK: places the end of the chain at target, keeping the bend plane of the current pose.
         /// Law of cosines gives the shoulder angle; the elbow follows.
         /// </summary>
-        public static void TwoBoneIK(Transform root, Transform mid, Transform end, Vector3 target)
+        public static void TwoBoneIK(Transform root, Transform mid, Transform end, Vector3 target,
+            System.Func<Vector3, float> elbowPenalty = null)
         {
             Vector3 a = root.position, b = mid.position, c = end.position;
             float upperLen = (b - a).magnitude, lowerLen = (c - b).magnitude;
@@ -265,6 +333,27 @@ namespace CharacterControllerSystem
             Vector3 elbowA = a + Quaternion.AngleAxis(angle, normal) * dir * upperLen;
             Vector3 elbowB = a + Quaternion.AngleAxis(-angle, normal) * dir * upperLen;
             Vector3 elbow = (elbowA - b).sqrMagnitude <= (elbowB - b).sqrMagnitude ? elbowA : elbowB;
+            if (elbowPenalty != null && elbowPenalty(elbow) > 0f)
+            {
+                // The elbow may sit anywhere on the circle around the shoulder-to-wrist axis. Take the nearest
+                // point of it that is clear of the obstacle (or the least buried one).
+                Vector3 best = elbow;
+                float bestPen = float.MaxValue, bestTurn = float.MaxValue;
+                for (int i = 1; i < 24; i++)
+                {
+                    float turn = (i + 1) / 2 * 15f * (i % 2 == 0 ? -1f : 1f);
+                    Vector3 e = a + Quaternion.AngleAxis(turn, dir) * (elbow - a);
+                    float pen = elbowPenalty(e);
+                    if (pen < bestPen - 1e-4f || (Mathf.Abs(pen - bestPen) <= 1e-4f && Mathf.Abs(turn) < bestTurn))
+                    {
+                        best = e;
+                        bestPen = pen;
+                        bestTurn = Mathf.Abs(turn);
+                    }
+                    if (pen <= 0f) break; // turns are tried nearest first
+                }
+                elbow = best;
+            }
 
             Quaternion endRotation = end.rotation; // keep the hand's own orientation
             root.rotation = Quaternion.FromToRotation(b - a, elbow - a) * root.rotation;

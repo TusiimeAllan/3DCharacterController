@@ -49,6 +49,10 @@ namespace CharacterControllerSystem
         public float ReturnDelay = 0.6f;
         [Tooltip("Thickness of the sight lines (thin poles don't count as hiding the body)")]
         public float SightRadius = 0.06f;
+        [Tooltip("Seconds the camera's height lags the player during jumps, drops and climbs (keeps the view over edges)")]
+        public float VerticalLag = 0.3f;
+        [Tooltip("How fast the camera closes in when that is the only way to see the player (geometry still snaps)")]
+        public float VisibilityPullSpeed = 2.5f;
 
         public bool PlayerFullyVisible { get; private set; } = true;
         /// <summary>Vertical shift of the orbit point set by gameplay (e.g. following a diver's head down).</summary>
@@ -57,7 +61,7 @@ namespace CharacterControllerSystem
         private static readonly HumanBodyBones[] SightBones =
             { HumanBodyBones.Head, HumanBodyBones.Chest, HumanBodyBones.Hips, HumanBodyBones.LeftFoot, HumanBodyBones.RightFoot };
         private static readonly float[] YawSteps = { 0f, 15f, -15f, 30f, -30f, 45f, -45f, 60f, -60f, 80f, -80f };
-        private static readonly float[] PitchSteps = { 0f, 12f, 24f, 35f };
+        private static readonly float[] PitchSteps = { 0f, 12f, 24f, 35f, -10f };
 
         private float _yaw;
         private float _pitch = 15f;
@@ -68,6 +72,10 @@ namespace CharacterControllerSystem
         private float _lastSearch = -1f;
         private Transform _player;
         private Animator _playerAnimator;
+        private ThirdPersonController _controller;
+        private float _pivotY, _pivotYVelocity;
+        private bool _pivotYReady;
+        private float _relaxedHold;
         private readonly Vector3[] _points = new Vector3[5];
         private readonly RaycastHit[] _hits = new RaycastHit[12];
 
@@ -78,6 +86,16 @@ namespace CharacterControllerSystem
             // eulerAngles.x is 0..360, convert to -180..180 so the clamp works for upward pitch.
             _pitch = Mathf.DeltaAngle(0f, angles.x);
             _currentDistance = Distance;
+        }
+
+        /// <summary>Points the camera (e.g. after a teleport), clearing any automatic offset.</summary>
+        public void SetOrientation(float yaw, float pitch)
+        {
+            _yaw = yaw;
+            _pitch = pitch;
+            _autoYaw = _autoPitch = _targetAutoYaw = _targetAutoPitch = _autoYawVel = _autoPitchVel = 0f;
+            _currentDistance = Distance;
+            _pivotYReady = false;
         }
 
         private void LateUpdate()
@@ -101,8 +119,19 @@ namespace CharacterControllerSystem
             }
             _pitch = Mathf.Clamp(_pitch, BottomClamp, TopClamp);
 
-            Vector3 pivot = Target.position + Vector3.up * (HeightOffset + PivotOffset);
+            // Climbing, vaulting, dropping, falling: the ledge hides the feet on purpose. Only ask to see the head
+            // and chest, and never pull in just for visibility, so the view stays steady through the move.
+            bool relaxed = _controller != null && (!_controller.Grounded || _controller.ExternallyDriven);
+            // The orbit point's height trails fast vertical moves (a drop off a ledge, a climb), so the camera
+            // stays over the edge instead of being dragged into it.
+            if (relaxed) _relaxedHold = 0.35f;
+            else if (_relaxedHold > 0f) _relaxedHold -= Time.deltaTime;
+            float targetY = Target.position.y + HeightOffset + PivotOffset;
+            if (!_pivotYReady) { _pivotY = targetY; _pivotYReady = true; }
+            _pivotY = Mathf.SmoothDamp(_pivotY, targetY, ref _pivotYVelocity, relaxed || _relaxedHold > 0f ? VerticalLag : 0.05f);
+            Vector3 pivot = new Vector3(Target.position.x, _pivotY, Target.position.z);
             int pointCount = GatherSightPoints();
+            if (relaxed) pointCount = Mathf.Min(pointCount, 2);
 
             if (KeepPlayerVisible && !looking && pointCount > 0) ChooseView(pivot, pointCount);
 
@@ -113,14 +142,16 @@ namespace CharacterControllerSystem
             Quaternion rotation = Quaternion.Euler(pitch, _yaw + _autoYaw, 0f);
             Vector3 back = -(rotation * Vector3.forward);
 
-            float targetDistance = CollisionDistance(pivot, back, Distance);
+            float geometry = CollisionDistance(pivot, back, Distance);
+            float targetDistance = geometry;
             // Still hidden at this angle (nothing better found): come closer until the body shows.
-            if (KeepPlayerVisible && pointCount > 0 && Visible(pivot + back * targetDistance, pointCount) < pointCount)
-                targetDistance = ClosestVisibleDistance(pivot, back, targetDistance, pointCount);
+            if (KeepPlayerVisible && !relaxed && pointCount > 0 && Visible(pivot + back * geometry, pointCount) < pointCount)
+                targetDistance = ClosestVisibleDistance(pivot, back, geometry, pointCount);
 
-            // Snap in instantly so we never clip through walls, ease back out smoothly.
-            if (targetDistance < _currentDistance)
-                _currentDistance = targetDistance;
+            if (geometry < _currentDistance)
+                _currentDistance = geometry; // a wall: snap in at once, never clip through
+            else if (targetDistance < _currentDistance)
+                _currentDistance = Mathf.Lerp(_currentDistance, targetDistance, 1f - Mathf.Exp(-VisibilityPullSpeed * Time.deltaTime));
             else
                 _currentDistance = Mathf.Lerp(_currentDistance, targetDistance, 1f - Mathf.Exp(-RecoverSpeed * Time.deltaTime));
 
@@ -152,7 +183,7 @@ namespace CharacterControllerSystem
             float bestScore = current, bestYaw = _targetAutoYaw, bestPitch = _targetAutoPitch;
             foreach (float pitchStep in PitchSteps)
             {
-                if (pitchStep > MaxAutoPitch) continue;
+                if (pitchStep > MaxAutoPitch || _pitch + pitchStep < BottomClamp) continue;
                 foreach (float yawStep in YawSteps)
                 {
                     if (Mathf.Abs(yawStep) > MaxAutoYaw) continue;
@@ -252,6 +283,7 @@ namespace CharacterControllerSystem
             {
                 var cc = Target.GetComponentInParent<CharacterController>();
                 _player = cc != null ? cc.transform : Target.root;
+                _controller = _player != null ? _player.GetComponent<ThirdPersonController>() : null;
             }
             // The switcher swaps models: look the animator up again when it changes.
             if (_playerAnimator == null || !_playerAnimator.isActiveAndEnabled)

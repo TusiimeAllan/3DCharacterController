@@ -382,7 +382,7 @@ namespace CharacterControllerSystem.EditorTools
             Label(g, "4.0 m", new Vector3(-42f, 4.6f, -36f), 180f);
             var ladderGo = new GameObject("Ladder");
             ladderGo.transform.SetParent(g, false);
-            ladderGo.transform.position = new Vector3(-44f, 0f, -36f);
+            ladderGo.transform.position = new Vector3(-44f, 0f, -35.8f); // stands 0.2 m off the wall
             ladderGo.transform.rotation = Quaternion.LookRotation(Vector3.forward); // climbing face points +z
             var ladder = ladderGo.AddComponent<CharacterControllerSystem.Ladder>();
             ladder.Height = 4f;
@@ -395,10 +395,10 @@ namespace CharacterControllerSystem.EditorTools
                 if (col != null) Object.DestroyImmediate(col);
                 part.transform.SetParent(ladderGo.transform, true);
             }
-            Part("Rail_L", new Vector3(-44.4f, 0f, -36f), new Vector3(-44.33f, 4.4f, -35.92f));
-            Part("Rail_R", new Vector3(-43.67f, 0f, -36f), new Vector3(-43.6f, 4.4f, -35.92f));
+            Part("Rail_L", new Vector3(-44.4f, 0f, -36f), new Vector3(-44.33f, 4.4f, -35.76f));
+            Part("Rail_R", new Vector3(-43.67f, 0f, -36f), new Vector3(-43.6f, 4.4f, -35.76f));
             for (int i = 1; i <= 13; i++)
-                Part($"Rung_{i}", new Vector3(-44.33f, i * 0.3f, -35.98f), new Vector3(-43.67f, i * 0.3f + 0.04f, -35.94f));
+                Part($"Rung_{i}", new Vector3(-44.33f, i * 0.3f, -35.82f), new Vector3(-43.67f, i * 0.3f + 0.04f, -35.78f));
         }
 
         /// <summary>

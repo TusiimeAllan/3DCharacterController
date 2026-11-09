@@ -51,6 +51,8 @@ namespace CharacterControllerSystem
         public enum State { None, Hanging, Ladder }
         public State Current { get; private set; }
         public bool IsClimbing => Current != State.None;
+        /// <summary>The ladder being climbed, or null.</summary>
+        public Ladder CurrentLadder => Current == State.Ladder ? _ladder : null;
 
         private static readonly int HangingId = Animator.StringToHash("Hanging");
         private static readonly int HangMoveId = Animator.StringToHash("HangMove");
@@ -70,6 +72,8 @@ namespace CharacterControllerSystem
         private float _ladderY;
         private Vector3 _align;         // measured correction so the hands meet their target
         private float _cooldown;
+        private Vector3 _grabFrom;
+        private float _grabTime = 1f;
 
         private void Awake()
         {
@@ -123,11 +127,15 @@ namespace CharacterControllerSystem
             }
             else
             {
-                // Ladder: hands in the ladder's plane and centred on it; height is up to the player.
-                Vector3 target = _ladder.Bottom;
-                Vector3 offset = target - hands;
+                // Ladder: the feet stand on the rungs (their plane), the body is centred on the ladder; height is
+                // up to the player. The hands are brought onto the rungs by BodyContactSolver.
+                var lf = _animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+                var rf = _animator.GetBoneTransform(HumanBodyBones.RightFoot);
+                Vector3 feet = lf != null && rf != null ? (lf.position + rf.position) * 0.5f : hands;
                 Vector3 right = Vector3.Cross(Vector3.up, _ladder.Out);
-                error = _ladder.Out * Vector3.Dot(offset, _ladder.Out) + right * Vector3.Dot(offset, right);
+                Vector3 rungs = _ladder.Bottom + _ladder.Out * 0.1f; // the ball of the foot on the rung
+                error = _ladder.Out * Vector3.Dot(rungs - feet, _ladder.Out) +
+                        right * Vector3.Dot(_ladder.Bottom - hands, right);
             }
             _align += error * (1f - Mathf.Exp(-AlignRate * Time.deltaTime));
             _align = Vector3.ClampMagnitude(_align, 1.5f);
@@ -156,6 +164,8 @@ namespace CharacterControllerSystem
             _ledgeTop = top.point.y;
             _edge = new Vector3(wall.point.x, _ledgeTop, wall.point.z);
             _align = Vector3.zero;
+            _grabFrom = transform.position;
+            _grabTime = 0f;
             Current = State.Hanging;
             Controller.ExternallyDriven = true;
             transform.rotation = Quaternion.LookRotation(_face);
@@ -197,7 +207,11 @@ namespace CharacterControllerSystem
 
         private void PlaceHanging()
         {
-            transform.position = _edge - _face * WallDistance - Vector3.up * HangHandHeight + _align;
+            Vector3 hang = _edge - _face * WallDistance - Vector3.up * HangHandHeight + _align;
+            // Reach the hang over a moment rather than snapping onto it from wherever the jump was.
+            _grabTime += Time.deltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(_grabTime / 0.18f));
+            transform.position = Vector3.Lerp(_grabFrom, hang, k);
             transform.rotation = Quaternion.LookRotation(_face);
             Physics.SyncTransforms();
         }
@@ -335,6 +349,12 @@ namespace CharacterControllerSystem
         }
 
         // ---------------------------------------------------------------- shared
+
+        /// <summary>Lets go of any ledge or ladder at once (e.g. before a teleport).</summary>
+        public void Cancel()
+        {
+            if (IsClimbing) Detach(Vector3.zero);
+        }
 
         private void Detach(Vector3 push)
         {

@@ -50,6 +50,12 @@ namespace CharacterControllerSystem
         public float MaxDrop = 3.2f;
         [Tooltip("Seconds before another move can start")]
         public float Cooldown = 0.3f;
+        [Tooltip("Climbs and hurdles start only this close to the obstacle's face (m); the recording's run-up is skipped to match")]
+        public float TriggerDistance = 0.9f;
+        [Tooltip("Jumping down from a ledge needs this much speed (m/s); slower, the character just steps off, so it can stand at edges")]
+        public float DropRunSpeed = 3f;
+        [Tooltip("...and the edge this close (m)")]
+        public float DropTriggerDistance = 0.7f;
 
         [Header("Slide (sprint, then crouch)")]
         public bool EnableSlide = true;
@@ -174,7 +180,7 @@ namespace CharacterControllerSystem
         {
             // Distance to the wall face along the approach direction.
             float faceDist = Vector3.Dot(wall.point - pos, face);
-            if (faceDist < 0.2f) return;
+            if (faceDist < 0.2f || faceDist > TriggerDistance) return; // not there yet: keep walking
 
             // Top of the obstacle just past its face.
             Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * 0.15f;
@@ -227,11 +233,14 @@ namespace CharacterControllerSystem
 
         private void TryDrop(Vector3 pos, Vector3 fwd)
         {
+            Vector3 speed = _cc.velocity;
+            speed.y = 0f;
+            if (speed.magnitude < DropRunSpeed) return; // walking: step off (or stop at the edge)
             // Walk the ground ahead until it falls away.
             float edge = -1f;
             float groundY = 0f;
             float previousDrop = 0f;
-            for (float d = 0.2f; d <= 1.6f; d += 0.1f)
+            for (float d = 0.2f; d <= DropTriggerDistance; d += 0.1f)
             {
                 Vector3 p = pos + fwd * d;
                 bool hit = Raycast(p + Vector3.up * 0.5f, Vector3.down, MaxDrop + 0.6f, out RaycastHit h);
@@ -284,10 +293,10 @@ namespace CharacterControllerSystem
             _startRotation = transform.rotation;
             _endY = _origin.y;
             _elapsed = 0f;
+            _s0 = Vector2.zero;
             _collide = true;
             IsActive = true;
-            _paramSet = true;
-            SetParkourParam(index + 1);
+            PlayState(move, move.WindowStart);
 
             _inputs.crouch = false; // the slide is the crouch; stand up after unless there is no headroom
             _previousCrouch = false;
@@ -327,14 +336,17 @@ namespace CharacterControllerSystem
             _forwardScale = 1f;
             _heightScale = Mathf.Max(0.3f, (endY - _origin.y) / Mathf.Max(0.05f, _move.Height));
             _correctFrom = 0.4f;
+            _unstretchFrom = 1f;
             if (_move.HasHold && ledgePoint.HasValue)
                 FitHold(_move, ledgePoint.Value.y - _origin.y, Vector3.Dot(ledgePoint.Value - _origin, Flat(face)));
             _endY = endY;
             _elapsed = 0f;
+            _s0 = Vector2.zero;
+            _correction = Vector3.zero;
+            _lastPathPosition = _origin;
             _collide = false;
             IsActive = true;
-            _paramSet = true;
-            SetParkourParam(index + 1);
+            PlayState(_move, _move.WindowStart);
             Controller.ExternallyDriven = true;
             return true;
         }
@@ -348,12 +360,14 @@ namespace CharacterControllerSystem
             int index = options[Random.Range(0, options.Count)];
             var move = Library.Moves[index];
 
-            // Start once the obstacle is about where it is in the recording; stretch the rest.
-            float scale = contactDistance / Mathf.Max(0.1f, move.ContactDistance);
-            if (scale > 1.3f) return; // still too far: keep running, try again next frame
-            _forwardScale = Mathf.Max(0.35f, scale);
-            _heightScale = height / Mathf.Max(0.05f, move.Height);
+            // Start at the point of the recording that is as far from its obstacle as we are from ours
+            // (skipping the rest of its run-up), so nothing is stretched and the move begins right here.
+            float startP = ProgressAtForward(move, move.ContactDistance - contactDistance);
+            _s0 = move.Sample(startP);
+            _forwardScale = 1f;
+            _heightScale = height / Mathf.Max(0.05f, move.Height - _s0.y);
             _correctFrom = 0.4f;
+            _unstretchFrom = 1f;
             if (move.HasHold && kind != ParkourKind.Hurdle)
                 FitHold(move, height, Vector3.Dot(_pendingLedge - pos, face));
 
@@ -368,11 +382,12 @@ namespace CharacterControllerSystem
             _forward = face;
             _startRotation = transform.rotation;
             _endY = endY;
-            _elapsed = 0f;
+            _elapsed = startP * move.Duration;
+            _correction = Vector3.zero;
+            _lastPathPosition = pos;
             _collide = false;
             IsActive = true;
-            _paramSet = true;
-            SetParkourParam(index + 1);
+            PlayState(move, move.WindowStart + _elapsed);
 
             Controller.ExternallyDriven = true; // the path places the capsule, kept out of the geometry
         }
@@ -387,21 +402,37 @@ namespace CharacterControllerSystem
             }
 
             float p = Mathf.Clamp01(_elapsed / Mathf.Max(0.05f, _move.Duration));
-            Vector2 s = _move.Sample(p);
-            Vector2 end = _move.Sample(1f);
+            Vector2 s = _move.Sample(p) - _s0;
+            Vector2 end = _move.Sample(1f) - _s0;
             float y = _origin.y + s.y * _heightScale;
             // Land exactly on the measured surface.
             float endError = _endY - (_origin.y + end.y * _heightScale);
             y += endError * Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(_correctFrom, 1f, p));
             // Crouches and rolls already lower the body in the pose; the capsule never goes below the ground.
             y = Mathf.Max(y, Mathf.Min(_origin.y, _endY));
-            Vector3 position = _origin + _forward * (s.x * _forwardScale);
+            // The stretch that puts the hands on the edge applies up to the end of the hold; after it the
+            // recording's own pace resumes (otherwise the step-off lunges forward).
+            float forward;
+            if (_unstretchFrom < 1f && p > _unstretchFrom)
+            {
+                float held = _move.Sample(_unstretchFrom).x - _s0.x;
+                forward = held * _forwardScale + (s.x - held);
+            }
+            else forward = s.x * _forwardScale;
+            Vector3 position = _origin + _forward * forward;
             position.y = y;
             if (_collide)
             {
                 // Slide: move with collisions, hugging the ground; stop if something blocks the way.
                 Vector3 delta = position - transform.position;
                 delta.y = -3f * dt;
+                // The recording stands up at the end; under a low roof, end here and let the crouch take over.
+                if (p > 0.5f && Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.up,
+                        Controller.StandingHeight - 0.4f, Controller.GroundLayers, QueryTriggerInteraction.Ignore))
+                {
+                    Finish();
+                    return;
+                }
                 Vector3 before = transform.position;
                 _cc.Move(delta);
                 // Blocked (a wall, not just brushing a low roof): end the slide there.
@@ -417,7 +448,18 @@ namespace CharacterControllerSystem
             else
             {
                 // Follow the recorded path, but never sink into the obstacle (or anything else) on the way.
-                transform.position = Depenetrate(position);
+                // A correction is applied at once when needed, and eased off when no longer needed, so the body
+                // never snaps forward the moment it clears an edge.
+                Vector3 needed = Depenetrate(position) - position;
+                _correction = needed.sqrMagnitude >= _correction.sqrMagnitude
+                    ? needed
+                    : Vector3.MoveTowards(_correction, needed, 1.5f * dt);
+                Vector3 placed = Depenetrate(position + _correction);
+                // Never move further in a frame than the recording itself moved, plus a little for corrections:
+                // whatever the obstacle does to the path, the body can't teleport.
+                float limit = (position - _lastPathPosition).magnitude + 2f * dt;
+                transform.position = transform.position + Vector3.ClampMagnitude(placed - transform.position, limit);
+                _lastPathPosition = position;
                 Physics.SyncTransforms();
             }
             transform.rotation = Quaternion.Slerp(_startRotation, Quaternion.LookRotation(_forward),
@@ -426,8 +468,42 @@ namespace CharacterControllerSystem
             if (p >= 1f) Finish();
         }
 
+        /// <summary>Stops any move in progress at once (e.g. before a teleport).</summary>
+        public void Cancel()
+        {
+            if (IsActive) Finish();
+        }
+
         private Vector3 _pendingLedge;
+        private Vector2 _s0; // recorded root offset where the move was started (run-up skipped)
+
+        /// <summary>Progress at which the recorded path has gone this far forward (0 if never).</summary>
+        private static float ProgressAtForward(ParkourMove move, float forward)
+        {
+            if (forward <= 0f || move.Path == null || move.Path.Length < 2) return 0f;
+            for (int i = 1; i < move.Path.Length; i++)
+            {
+                if (move.Path[i].x < forward) continue;
+                float a = move.Path[i - 1].x, b = move.Path[i].x;
+                float t = b > a ? Mathf.InverseLerp(a, b, forward) : 0f;
+                return Mathf.Clamp01((i - 1 + t) / (move.Path.Length - 1));
+            }
+            return 0f;
+        }
+
+        /// <summary>Cross-fades into the move's state at an exact clip time (so a shortened run-up matches).</summary>
+        private void PlayState(ParkourMove move, float clipTime)
+        {
+            const float fade = 0.12f;
+            if (_mm != null && _mm.isActiveAndEnabled && _mm.TryGetControllerLayer(out AnimatorControllerPlayable layer))
+                layer.CrossFadeInFixedTime(move.StateName, fade, 0, clipTime);
+            else if (_animator != null && _animator.runtimeAnimatorController != null)
+                _animator.CrossFadeInFixedTime(move.StateName, fade, 0, clipTime);
+        }
         private float _correctFrom = 0.4f;
+        private float _unstretchFrom = 1f;
+        private Vector3 _correction;
+        private Vector3 _lastPathPosition;
 
         /// <summary>
         /// Stretches the recorded path so that, while the recording holds its edge, the hands are exactly on the
@@ -438,11 +514,14 @@ namespace CharacterControllerSystem
         private void FitHold(ParkourMove move, float ledgeHeight, float faceDistance)
         {
             const float palm = 0.035f, inset = 0.09f;
-            if (move.HoldRootRise > 0.05f)
-                _heightScale = Mathf.Clamp((ledgeHeight + palm - move.HoldHandHeight + move.HoldRootRise) / move.HoldRootRise, 0.3f, 3f);
-            if (move.HoldRootForward > 0.05f)
-                _forwardScale = Mathf.Clamp((faceDistance + inset - move.HoldHandForward + move.HoldRootForward) / move.HoldRootForward, 0.2f, 3f);
+            float rise = move.HoldRootRise - _s0.y, ahead = move.HoldRootForward - _s0.x;
+            float handHeight = move.HoldHandHeight - _s0.y, handForward = move.HoldHandForward - _s0.x;
+            if (rise > 0.05f)
+                _heightScale = Mathf.Clamp((ledgeHeight + palm - handHeight + rise) / rise, 0.3f, 3f);
+            if (ahead > 0.05f)
+                _forwardScale = Mathf.Clamp((faceDistance + inset - handForward + ahead) / ahead, 0.2f, 3f);
             _correctFrom = Mathf.Clamp(move.HoldEnd, 0.4f, 0.95f);
+            _unstretchFrom = Mathf.Clamp(move.HoldEnd, 0.2f, 1f);
         }
 
         private void Finish()
@@ -477,6 +556,13 @@ namespace CharacterControllerSystem
         /// <summary>Moves a capsule position out of any colliders it overlaps (smallest push each).</summary>
         private Vector3 Depenetrate(Vector3 p)
         {
+            // Below the top of the obstacle being climbed, the capsule stays in front of its face. (Pushed out of
+            // the box's corner, the smallest way out flips between up and back, which reads as a teleport.)
+            if (HasLedge && p.y < LedgeTop - 0.05f)
+            {
+                float into = Vector3.Dot(p - LedgePoint, LedgeFace);
+                if (into < 0.15f && into + _cc.radius > 0f) p -= LedgeFace * (into + _cc.radius);
+            }
             Quaternion rot = transform.rotation;
             for (int iteration = 0; iteration < 3; iteration++)
             {
