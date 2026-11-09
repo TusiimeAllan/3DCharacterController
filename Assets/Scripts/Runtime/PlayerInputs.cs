@@ -33,6 +33,7 @@ namespace CharacterControllerSystem
 #if ENABLE_INPUT_SYSTEM
         private PlayerInput _playerInput;
         private InputAction _strafeAction;
+        private InputAction _sprintAction;
         private bool _strafeLatched;
 #endif
 
@@ -57,10 +58,17 @@ namespace CharacterControllerSystem
             _strafeAction = _playerInput != null && _playerInput.actions != null
                 ? _playerInput.actions.FindAction("Strafe")
                 : null;
+            _sprintAction = _playerInput != null && _playerInput.actions != null
+                ? _playerInput.actions.FindAction("Sprint")
+                : null;
         }
 
         private void Update()
         {
+            // Sprint is a hold: poll it, because a Button action with no release interaction does not always
+            // send a message on release (the character kept sprinting after letting go).
+            if (_sprintAction != null && _sprintAction.enabled) sprint = _sprintAction.IsPressed();
+
             // Mouse: hold (polled, so it never misses a release). Gamepad: a stick click toggles it, like a lock-on.
             // Right mouse on a free cursor is not a strafe.
             if (_strafeAction != null)

@@ -18,7 +18,7 @@ namespace CharacterControllerSystem
         [Tooltip("Sprint speed of the character in m/s")]
         public float SprintSpeed = 6.0f;
         [Tooltip("Crouch move speed of the character in m/s")]
-        public float CrouchSpeed = 1.5f;
+        public float CrouchSpeed = 1.2f;
         [Tooltip("How fast the character turns to face movement direction")]
         [Range(0.0f, 0.3f)] public float RotationSmoothTime = 0.12f;
         [Tooltip("Acceleration and deceleration")]

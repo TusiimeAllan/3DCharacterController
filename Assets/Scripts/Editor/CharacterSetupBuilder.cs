@@ -74,6 +74,7 @@ namespace CharacterControllerSystem.EditorTools
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
             AirborneStatesBuilder.Apply(controller); // UAL jump start/loop/land and hard-landing roll
+            CrouchStatesBuilder.Apply(controller); // UAL crouch idle/walk matched to the crouch speed
             ActionStatesBuilder.Apply(controller); // hits, death, sit, interact, punches, emotes, push
             StrafeStatesBuilder.Apply(controller); // face the camera and move in any direction
             ParkourBuilder.ApplyAnimator(controller); // hurdle, climb and drop states

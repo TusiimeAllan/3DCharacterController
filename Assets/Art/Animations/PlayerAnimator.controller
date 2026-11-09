@@ -603,20 +603,20 @@ BlendTree:
   m_Name: Crouch
   m_Childs:
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: f681c964a7049c543ac0815170950ca6, type: 3}
+    m_Motion: {fileID: -7993625790543202706, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
     m_Threshold: 0
     m_Position: {x: 0, y: 0}
     m_TimeScale: 1
     m_CycleOffset: 0
-    m_DirectBlendParameter: Blend
+    m_DirectBlendParameter: 
     m_Mirror: 0
   - serializedVersion: 2
-    m_Motion: {fileID: -203655887218126122, guid: 78ac08ca1c2a09c4ab8dc7f0864725ba, type: 3}
-    m_Threshold: 1.5
+    m_Motion: {fileID: 4366774653929184976, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+    m_Threshold: 1.2
     m_Position: {x: 0, y: 0}
-    m_TimeScale: 1
+    m_TimeScale: 1.2
     m_CycleOffset: 0
-    m_DirectBlendParameter: Blend
+    m_DirectBlendParameter: 
     m_Mirror: 0
   m_BlendParameter: Speed
   m_BlendParameterY: Speed

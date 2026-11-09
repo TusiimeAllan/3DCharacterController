@@ -161,7 +161,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CharacterControllerSystem.ThirdPersonController
   MoveSpeed: 2
   SprintSpeed: 6
-  CrouchSpeed: 1.5
+  CrouchSpeed: 1.2
   RotationSmoothTime: 0.12
   SpeedChangeRate: 10
   JumpHeight: 1.2

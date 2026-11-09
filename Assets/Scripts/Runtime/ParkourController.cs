@@ -315,8 +315,7 @@ namespace CharacterControllerSystem
             _paramSet = true;
             SetParkourParam(index + 1);
 
-            Controller.ExternallyDriven = true;
-            _cc.enabled = false; // the path places the capsule; re-enabled when the move ends
+            Controller.ExternallyDriven = true; // the path places the capsule, kept out of the geometry
         }
 
         private void Step(float dt)
@@ -356,7 +355,12 @@ namespace CharacterControllerSystem
                     return;
                 }
             }
-            else transform.position = position;
+            else
+            {
+                // Follow the recorded path, but never sink into the obstacle (or anything else) on the way.
+                transform.position = Depenetrate(position);
+                Physics.SyncTransforms();
+            }
             transform.rotation = Quaternion.Slerp(_startRotation, Quaternion.LookRotation(_forward),
                 Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(p / 0.15f)));
 
@@ -388,6 +392,35 @@ namespace CharacterControllerSystem
         }
 
         // ---------------------------------------------------------------- physics helpers
+
+        private readonly Collider[] _overlaps = new Collider[8];
+
+        /// <summary>Moves a capsule position out of any colliders it overlaps (smallest push each).</summary>
+        private Vector3 Depenetrate(Vector3 p)
+        {
+            Quaternion rot = transform.rotation;
+            for (int iteration = 0; iteration < 3; iteration++)
+            {
+                Vector3 center = p + rot * _cc.center;
+                float half = Mathf.Max(0f, _cc.height * 0.5f - _cc.radius);
+                int n = Physics.OverlapCapsuleNonAlloc(center + Vector3.up * half, center - Vector3.up * half, _cc.radius,
+                    _overlaps, Controller.GroundLayers, QueryTriggerInteraction.Ignore);
+                bool pushed = false;
+                for (int i = 0; i < n; i++)
+                {
+                    var other = _overlaps[i];
+                    if (other.transform.IsChildOf(transform)) continue;
+                    if (Physics.ComputePenetration(_cc, p, rot, other, other.transform.position, other.transform.rotation,
+                            out Vector3 dir, out float dist) && dist > 0.0005f)
+                    {
+                        p += dir * (dist + 0.002f);
+                        pushed = true;
+                    }
+                }
+                if (!pushed) break;
+            }
+            return p;
+        }
 
         private static Vector3 Flat(Vector3 v)
         {
