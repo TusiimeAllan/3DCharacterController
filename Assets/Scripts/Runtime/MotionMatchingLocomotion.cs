@@ -46,6 +46,13 @@ namespace CharacterControllerSystem
         [Tooltip("Trajectory responsiveness while sprinting (lower = wider, smoother turns)")]
         public float SprintBias = 6f;
 
+        [Header("Strafing")]
+        [Tooltip("Strafe with the motion capture strafe set (tag \"Strafe\") instead of the Animator Controller blend tree")]
+        public bool MotionMatchedStrafe = true;
+        public MxMInputProfile StrafeProfile;
+        public string StrafeTag = "Strafe";
+        public string StrafeCalibration = "Strafe";
+
         [Header("Controller Layer (jump, fall, crouch)")]
         [Tooltip("Seconds to fade our Animator Controller in when leaving the ground or crouching")]
         public float LayerFadeIn = 0.1f;
@@ -80,6 +87,7 @@ namespace CharacterControllerSystem
         private bool _sprinting;
         private bool _calibrationReady;
         private EAngularErrorWarp _angularWarp;
+        private bool _mxmStrafing;
 
         private void Reset() => AutoAssign();
 
@@ -131,8 +139,12 @@ namespace CharacterControllerSystem
             Vector2 move = Controller.MovementLocked || Controller.ExternallyDriven ? Vector2.zero : Inputs.move;
             Trajectory.SetInput(move);
             bool sprinting = Controller.Grounded && Inputs.sprint && !Controller.IsCrouching && move != Vector2.zero;
-            if (sprinting != _sprinting) ApplyGait(sprinting);
-            Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale * Controller.SlopeSpeedFactor * Controller.WadeSpeedFactor;
+            UpdateStrafeMode(Controller.IsStrafing && MotionMatchedStrafe && UseMotionMatching);
+            if (!_mxmStrafing && sprinting != _sprinting) ApplyGait(sprinting);
+            float maxSpeed = _mxmStrafing
+                ? (Inputs.sprint ? Controller.StrafeSprintSpeed : Controller.MoveSpeed)
+                : (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed);
+            Trajectory.MaxSpeed = maxSpeed * Controller.SpeedScale * Controller.SlopeSpeedFactor * Controller.WadeSpeedFactor;
 
             // MxM's angular error warping turns the body towards the travel direction. While strafing the
             // controller keeps it facing the camera instead, so the two would fight.
@@ -147,8 +159,10 @@ namespace CharacterControllerSystem
             InLandingState = _controllerLayer.GetCurrentAnimatorStateInfo(0).IsTag(LandingTag) ||
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
+            // Strafing stays on motion matching (the strafe set) except for standing turns, which use the turn clips.
+            bool strafeOnController = Controller.IsStrafing && (!_mxmStrafing || Controller.StrafeTurn != 0);
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || Controller.IsStrafing || Controller.ExternallyDriven || Controller.IsSlidingOnSlope || InLandingState ||
+                                 Controller.IsCrouching || strafeOnController || Controller.ExternallyDriven || Controller.IsSlidingOnSlope || InLandingState ||
                                  (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
@@ -174,6 +188,34 @@ namespace CharacterControllerSystem
             if (UseMotionMatching == useMotionMatching) return;
             UseMotionMatching = useMotionMatching;
             ModeChanged?.Invoke(useMotionMatching);
+        }
+
+        /// <summary>
+        /// Strafe set on/off (as in the MxM demo): only poses tagged Strafe, the strafe calibration and input
+        /// profile, and a trajectory that keeps facing the camera while it follows the stick.
+        /// </summary>
+        private void UpdateStrafeMode(bool on)
+        {
+            if (on == _mxmStrafing || Mxm.CurrentAnimData == null) return;
+            _mxmStrafing = on;
+            if (on)
+            {
+                Mxm.AddRequiredTag(StrafeTag);
+                Mxm.SetCalibrationData(StrafeCalibration);
+                Mxm.SetFavourCurrentPose(true, 0.95f);
+                Trajectory.TrajectoryMode = ETrajectoryMoveMode.Strafe;
+                if (StrafeProfile != null) Trajectory.InputProfile = StrafeProfile;
+                Trajectory.PositionBias = Trajectory.DirectionBias = WalkBias;
+                Mxm.PastTrajectoryMode = EPastTrajectoryMode.CopyFromCurrentPose;
+            }
+            else
+            {
+                Mxm.RemoveRequiredTag(StrafeTag);
+                Mxm.SetFavourCurrentPose(false, 1f);
+                Trajectory.TrajectoryMode = ETrajectoryMoveMode.Normal;
+                Mxm.PastTrajectoryMode = EPastTrajectoryMode.ActualHistory;
+                ApplyGait(_sprinting, force: true); // back to the walk/sprint profile and calibration
+            }
         }
 
         private void ApplyGait(bool sprinting, bool force = false)

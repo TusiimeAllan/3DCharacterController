@@ -421,10 +421,12 @@ MonoBehaviour:
   SprintCalibration: Sprint
   WalkBias: 10
   SprintBias: 6
+  MotionMatchedStrafe: 1
+  StrafeProfile: {fileID: 11400000, guid: 5ac17047f0001cf48b86c260abbb2d83, type: 2}
+  StrafeTag: Strafe
+  StrafeCalibration: Strafe
   LayerFadeIn: 0.1
   LayerFadeOut: 0.25
-  AlternateAnimData: {fileID: 0}
-  AnimDataToggleKey: 26
 --- !u!114 &2188630293081521149
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -579,6 +581,11 @@ MonoBehaviour:
   MaxPitch: 55
   EdgeMargin: 0.75
   MinFloorClearance: 0.75
+  BreathSeconds: 20
+  RefillSeconds: 4
+  DrownDamage: 10
+  DrownInterval: 1.5
+  ExhaleInterval: {x: 2.2, y: 3.8}
   WadeStartDepth: 0.3
   WadeMinSpeed: 0.55
   WadeStepInterval: 0.42

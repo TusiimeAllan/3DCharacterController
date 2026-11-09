@@ -47,6 +47,25 @@ namespace CharacterControllerSystem
         public float MaxPelvisDrop = 0.45f;
         public float PelvisSmoothing = 10f;
 
+        [Header("Foot Locking")]
+        [Tooltip("Pin a planted foot where it landed until the animation lifts it (no sliding)")]
+        public bool EnableFootLocking = true;
+        [Tooltip("A foot lower than this above the ground counts as planted (m)")]
+        public float PlantHeight = 0.04f;
+        [Tooltip("...and slower than this across the ground (m/s)")]
+        public float PlantSpeed = 1.2f;
+        [Tooltip("Lifted this high, the foot is released (m)")]
+        public float ReleaseHeight = 0.07f;
+        [Tooltip("If the animation pulls the foot this far from where it is pinned, it is released (m)")]
+        public float MaxLockDrift = 0.3f;
+
+        [Header("Step Weight")]
+        [Tooltip("Downward kick the hips get when a foot plants, at running speed (m/s)")]
+        public float StepImpact = 0.35f;
+        [Tooltip("Stiffness of the spring the hips settle back on")]
+        public float ImpactSpring = 260f;
+        [Range(0.1f, 1.5f)] public float ImpactDamping = 0.55f;
+
         [Header("Slope Lean")]
         [Tooltip("Share of the slope angle the body leans into when walking uphill")]
         [Range(0f, 1f)] public float UphillLean = 0.5f;
@@ -73,6 +92,7 @@ namespace CharacterControllerSystem
         private float _lookWeight;
         private bool _posed;
         private float _lean;
+        private float _impact, _impactVelocity;
         private Vector3 _lookTarget;
         private int _solvedFrame = -1;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
@@ -83,6 +103,11 @@ namespace CharacterControllerSystem
             public Vector3 Position;
             public Quaternion Rotation;
             public bool Initialised;
+            public Vector3 PrevAnimated;
+            public bool HasPrev;
+            public bool Locked;
+            public Vector3 LockPosition;
+            public float LockWeight;
         }
 
         private Foot _left = new Foot { Goal = AvatarIKGoal.LeftFoot };
@@ -135,6 +160,8 @@ namespace CharacterControllerSystem
             {
                 _pelvisOffset = Mathf.Lerp(_pelvisOffset, 0f, dt * PelvisSmoothing);
                 _left.Initialised = _right.Initialised = false;
+                _left.Locked = _right.Locked = false;
+                _left.LockWeight = _right.LockWeight = 0f;
             }
 
             SolveLookAt(dt);
@@ -167,7 +194,11 @@ namespace CharacterControllerSystem
             float drop = Mathf.Min(leftHit ? leftDelta : 0f, rightHit ? rightDelta : 0f);
             drop = Mathf.Clamp(drop, -MaxPelvisDrop, 0f);
             _pelvisOffset = Mathf.Lerp(_pelvisOffset, drop, dt * PelvisSmoothing);
-            _animator.bodyPosition += up * (_pelvisOffset * _ikWeight);
+            _animator.bodyPosition += up * ((_pelvisOffset + _impact) * _ikWeight);
+            // The hips settle back from each step's impact on a damped spring.
+            float c = 2f * Mathf.Sqrt(ImpactSpring) * ImpactDamping;
+            _impactVelocity += (-ImpactSpring * _impact - c * _impactVelocity) * dt;
+            _impact = Mathf.Clamp(_impact + _impactVelocity * dt, -0.06f, 0.03f);
 
             ApplyFoot(ref _left, leftHit, leftTarget, leftRot, dt);
             ApplyFoot(ref _right, rightHit, rightTarget, rightRot, dt);
@@ -209,6 +240,8 @@ namespace CharacterControllerSystem
                 return; // no surface under this foot: leave the animated pose alone
             }
 
+            if (EnableFootLocking) LockFoot(ref foot, ref target, dt);
+
             // Pelvis moved the whole body; targets are absolute, so the solver bends the knee to reach.
             if (!foot.Initialised)
             {
@@ -227,6 +260,47 @@ namespace CharacterControllerSystem
             _animator.SetIKRotationWeight(foot.Goal, _ikWeight);
             _animator.SetIKPosition(foot.Goal, foot.Position);
             _animator.SetIKRotation(foot.Goal, foot.Rotation);
+        }
+
+        /// <summary>
+        /// Foot locking: when the animated foot comes down onto the ground and nearly stops, its ground position
+        /// is pinned until the animation lifts it again (or pulls it too far). Planting also kicks the hips down a
+        /// little, scaled by speed, so each step carries the body's weight.
+        /// </summary>
+        private void LockFoot(ref Foot foot, ref Vector3 target, float dt)
+        {
+            Vector3 animated = _animator.GetIKPosition(foot.Goal);
+            float footHeight = foot.Goal == AvatarIKGoal.LeftFoot ? _animator.leftFeetBottomHeight : _animator.rightFeetBottomHeight;
+            float lift = animated.y - footHeight - transform.position.y;
+            Vector3 v = foot.HasPrev ? (animated - foot.PrevAnimated) / Mathf.Max(1e-4f, dt) : Vector3.zero;
+            v.y = 0f;
+            foot.PrevAnimated = animated;
+            foot.HasPrev = true;
+
+            if (!foot.Locked)
+            {
+                if (lift < PlantHeight && v.magnitude < PlantSpeed)
+                {
+                    foot.Locked = true;
+                    foot.LockPosition = target;
+                    float speed = Controller != null ? Controller.LocalVelocity.magnitude : 0f;
+                    if (speed > 0.3f) _impactVelocity -= StepImpact * Mathf.Clamp01(speed / 4f + 0.25f);
+                }
+            }
+            else
+            {
+                Vector3 drift = target - foot.LockPosition;
+                drift.y = 0f;
+                if (lift > ReleaseHeight || drift.magnitude > MaxLockDrift) foot.Locked = false;
+            }
+
+            foot.LockWeight = Mathf.MoveTowards(foot.LockWeight, foot.Locked ? 1f : 0f, (foot.Locked ? 20f : 10f) * dt);
+            if (foot.LockWeight > 0.001f)
+            {
+                // Keep the pinned spot across the ground, but follow the surface height under it.
+                Vector3 pinned = new Vector3(foot.LockPosition.x, target.y, foot.LockPosition.z);
+                target = Vector3.Lerp(target, pinned, foot.LockWeight);
+            }
         }
 
         private void SolveLookAt(float dt)

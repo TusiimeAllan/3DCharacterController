@@ -21,6 +21,7 @@ namespace CharacterControllerSystem.EditorTools
         private const string AnimData = Demo + "/Data/MotionMatching/MocapAnimData.asset";
         private const string WalkProfile = Demo + "/Data/InputProfiles/Balanced/MocapInputProfile_Balanced.asset";
         private const string SprintProfile = Demo + "/Data/InputProfiles/Balanced/MocapSprintInputProfile_Balanced.asset";
+        private const string StrafeProfile = Demo + "/Data/InputProfiles/Balanced/MocapStrafeInputProfile_Balanced.asset";
         private const string Mocap = Demo + "/Animations/Mocap/";
         private const string ProfilePath = "Assets/Settings/CharacterSetupProfile.asset";
 
@@ -225,6 +226,7 @@ namespace CharacterControllerSystem.EditorTools
                 bridge.Trajectory = traj;
                 bridge.WalkProfile = AssetDatabase.LoadAssetAtPath<MxMInputProfile>(WalkProfile);
                 bridge.SprintProfile = AssetDatabase.LoadAssetAtPath<MxMInputProfile>(SprintProfile);
+                bridge.StrafeProfile = AssetDatabase.LoadAssetAtPath<MxMInputProfile>(StrafeProfile);
 
                 // Procedural foot grounding and look-at on Humanoid IK (needs the IK pass on every source).
                 var grounding = root.GetComponent<HumanoidGrounding>();
