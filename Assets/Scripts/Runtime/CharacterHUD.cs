@@ -208,6 +208,18 @@ namespace CharacterControllerSystem
                 if (la.Action == "Crouch") e.IsOn = () => Inputs != null && Inputs.crouch;
                 _legend.Add(e);
             }
+            var strafeAction = actions?.FindAction("Strafe");
+            var tpc = FindAnyObjectByType<ThirdPersonController>();
+            if (strafeAction != null && tpc != null && tpc.AllowStrafe)
+            {
+                string key = BindingText(strafeAction, pad);
+                if (!string.IsNullOrEmpty(key))
+                {
+                    var e = AddLegendEntry(key, pad ? "Strafe (toggle)" : "Strafe (hold)");
+                    e.IsOn = () => tpc.IsStrafing;
+                    _legend.Add(e);
+                }
+            }
 #endif
             int count = Switcher != null ? Mathf.Min(Switcher.Characters.Count, 9) : 0;
             if (count > 1) _legend.Add(AddLegendEntry(pad ? "LB / RB" : $"Tab / 1-{count}", "Change character"));

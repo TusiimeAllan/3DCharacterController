@@ -20,6 +20,8 @@ namespace CharacterControllerSystem
         [Tooltip("Set on press, cleared by whoever handles it (CharacterActions)")]
         public bool interact;
         public bool attack;
+        [Tooltip("Held: face the camera and move sideways / backwards (read every frame from the Strafe action)")]
+        public bool strafe;
 
         [Header("Mouse Cursor Settings")]
         public bool cursorLocked = true;
@@ -30,6 +32,8 @@ namespace CharacterControllerSystem
 
 #if ENABLE_INPUT_SYSTEM
         private PlayerInput _playerInput;
+        private InputAction _strafeAction;
+        private bool _strafeLatched;
 #endif
 
         /// <summary>True when look comes from a stick (a rate that must be scaled by deltaTime).</summary>
@@ -50,10 +54,24 @@ namespace CharacterControllerSystem
         {
             _playerInput = GetComponent<PlayerInput>();
             if (_playerInput == null) _playerInput = GetComponentInParent<PlayerInput>();
+            _strafeAction = _playerInput != null && _playerInput.actions != null
+                ? _playerInput.actions.FindAction("Strafe")
+                : null;
         }
 
         private void Update()
         {
+            // Mouse: hold (polled, so it never misses a release). Gamepad: a stick click toggles it, like a lock-on.
+            // Right mouse on a free cursor is not a strafe.
+            if (_strafeAction != null)
+            {
+                bool fromPad = _strafeAction.activeControl != null && _strafeAction.activeControl.device is Gamepad;
+                if (fromPad && _strafeAction.WasPressedThisFrame()) _strafeLatched = !_strafeLatched;
+                if (!LookIsRate) _strafeLatched = false;
+                bool held = !fromPad && _strafeAction.IsPressed() && cursorLocked;
+                strafe = held || _strafeLatched;
+            }
+
             // Escape releases the cursor, clicking back into the game locks it again.
             if (cursorLocked && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             {

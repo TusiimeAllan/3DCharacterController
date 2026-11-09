@@ -75,6 +75,7 @@ namespace CharacterControllerSystem.EditorTools
             AssetDatabase.SaveAssets();
             AirborneStatesBuilder.Apply(controller); // UAL jump start/loop/land and hard-landing roll
             ActionStatesBuilder.Apply(controller); // hits, death, sit, interact, punches, emotes, push
+            StrafeStatesBuilder.Apply(controller); // face the camera and move in any direction
             Debug.Log($"{Tag} Animator built at {p.ControllerPath}", controller);
             return controller;
         }

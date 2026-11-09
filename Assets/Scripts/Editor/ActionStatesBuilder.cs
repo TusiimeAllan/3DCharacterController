@@ -145,6 +145,7 @@ namespace CharacterControllerSystem.EditorTools
             Cond(push, loco, 0.25f, (AnimatorConditionMode.IfNot, 0f, "Pushing"));
 
             BuildHitLayer(controller, C("Hit Chest"), C("Hit Head"));
+            StrafeStatesBuilder.SyncExits(controller); // strafing must reach the new actions too
 
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();

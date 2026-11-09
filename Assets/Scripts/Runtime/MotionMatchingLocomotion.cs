@@ -14,9 +14,9 @@ namespace CharacterControllerSystem
     /// movement: the CharacterController still moves and turns the capsule (MxM root motion is off),
     /// MxM only chooses the poses that best match where the controller is heading.
     ///
-    /// Ground locomotion (idle, walk, run, sprint, starts, stops, turns) comes from MxM. Jump, fall and
-    /// crouch, which the MxM data has no clips for, come from our Animator Controller, hosted by MxM as
-    /// its controller layer and faded in whenever the character is airborne or crouched.
+    /// Ground locomotion (idle, walk, run, sprint, starts, stops, turns) comes from MxM. Jump, fall,
+    /// crouch and strafing, which the MxM data has no clips for, come from our Animator Controller, hosted by MxM as
+    /// its controller layer and faded in whenever the character is airborne, crouched or strafing.
     /// Press M in play mode to compare against the plain Animator Controller.
     /// </summary>
     [DefaultExecutionOrder(100)] // after ThirdPersonController has updated this frame's state
@@ -64,6 +64,9 @@ namespace CharacterControllerSystem
         private static readonly int FreeFallId = Animator.StringToHash("FreeFall");
         private static readonly int CrouchId = Animator.StringToHash("Crouch");
         private static readonly int FallSpeedId = Animator.StringToHash("FallSpeed");
+        private static readonly int StrafingId = Animator.StringToHash("Strafing");
+        private static readonly int StrafeXId = Animator.StringToHash("StrafeX");
+        private static readonly int StrafeZId = Animator.StringToHash("StrafeZ");
         private const string LandingTag = "Landing";
 
         /// <summary>True while the Animator Controller plays a landing or roll (states tagged "Landing").</summary>
@@ -74,6 +77,7 @@ namespace CharacterControllerSystem
         private float _layerWeight = 1f;
         private bool _sprinting;
         private bool _calibrationReady;
+        private EAngularErrorWarp _angularWarp;
 
         private void Reset() => AutoAssign();
 
@@ -107,6 +111,7 @@ namespace CharacterControllerSystem
         private void Start()
         {
             if (Trajectory.RelativeCameraTransform == null) Trajectory.RelativeCameraTransform = Controller.CameraTransform;
+            _angularWarp = Mxm.AngularErrorWarpType;
             ApplyGait(false, force: true);
         }
 
@@ -127,15 +132,21 @@ namespace CharacterControllerSystem
             if (sprinting != _sprinting) ApplyGait(sprinting);
             Trajectory.MaxSpeed = (sprinting ? Controller.SprintSpeed : Controller.MoveSpeed) * Controller.SpeedScale;
 
+            // MxM's angular error warping turns the body towards the travel direction. While strafing the
+            // controller keeps it facing the camera instead, so the two would fight.
+            var warp = Controller.IsStrafing ? EAngularErrorWarp.Off : _angularWarp;
+            if (Mxm.AngularErrorWarpType != warp) Mxm.AngularErrorWarpType = warp;
+
             if (!ResolveControllerLayer()) return;
 
-            // Hand jump, fall and crouch to our Animator Controller; ground locomotion to MxM.
+            // Hand jump, fall, crouch and strafing to our Animator Controller; ground locomotion to MxM.
+            // (The MxM mocap has no sideways or backwards clips, so strafing uses the Strafe blend tree.)
             // Landings and rolls finish on our controller before handing back, so they are not cut off.
             InLandingState = _controllerLayer.GetCurrentAnimatorStateInfo(0).IsTag(LandingTag) ||
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || InLandingState ||
+                                 Controller.IsCrouching || Controller.IsStrafing || InLandingState ||
                                  (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
@@ -149,6 +160,9 @@ namespace CharacterControllerSystem
             _controllerLayer.SetBool(FreeFallId, Controller.IsFreeFalling);
             _controllerLayer.SetBool(CrouchId, Controller.IsCrouching);
             _controllerLayer.SetFloat(FallSpeedId, Controller.FallSpeed);
+            _controllerLayer.SetBool(StrafingId, Controller.IsStrafing);
+            _controllerLayer.SetFloat(StrafeXId, Controller.LocalVelocity.x);
+            _controllerLayer.SetFloat(StrafeZId, Controller.LocalVelocity.y);
         }
 
         public void SetMode(bool useMotionMatching)

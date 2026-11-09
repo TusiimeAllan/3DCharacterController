@@ -83,10 +83,26 @@ namespace CharacterControllerSystem
         [Tooltip("Multiplies the target speed, e.g. slower while pushing")]
         public float SpeedScale = 1f;
 
+        [Header("Strafe")]
+        [Tooltip("Holding the Strafe input keeps the character facing the camera and moves it in any direction")]
+        public bool AllowStrafe = true;
+        [Tooltip("Sprint speed while strafing (m/s); the strafe run clips are about 4.3 m/s")]
+        public float StrafeSprintSpeed = 4.2f;
+        [Tooltip("Speed multiplier when moving straight backwards while strafing")]
+        [Range(0.3f, 1f)] public float StrafeBackwardScale = 0.7f;
+        [Tooltip("How fast the character turns to the camera while strafing")]
+        [Range(0.0f, 0.3f)] public float StrafeRotationSmoothTime = 0.05f;
+
+        /// <summary>True while strafing: facing follows the camera, not the movement.</summary>
+        public bool IsStrafing { get; private set; }
+        /// <summary>Smoothed planar velocity in the character's own frame (x right, y forward), m/s.</summary>
+        public Vector2 LocalVelocity { get; private set; }
+
         // player state
         private float _speed;
         private float _animationBlend;
         private float _targetRotation;
+        private float _moveRotation;
         private float _rotationVelocity;
         private float _verticalVelocity;
         private readonly float _terminalVelocity = 53.0f;
@@ -107,6 +123,9 @@ namespace CharacterControllerSystem
         private int _animMotionSpeed;
         private int _animCrouch;
         private int _animFallSpeed;
+        private int _animStrafing;
+        private int _animStrafeX;
+        private int _animStrafeZ;
 
         private bool _hasAnimator;
 
@@ -163,6 +182,9 @@ namespace CharacterControllerSystem
             _animMotionSpeed = Animator.StringToHash("MotionSpeed");
             _animCrouch = Animator.StringToHash("Crouch");
             _animFallSpeed = Animator.StringToHash("FallSpeed");
+            _animStrafing = Animator.StringToHash("Strafing");
+            _animStrafeX = Animator.StringToHash("StrafeX");
+            _animStrafeZ = Animator.StringToHash("StrafeZ");
         }
 
         private void GroundedCheck()
@@ -214,7 +236,14 @@ namespace CharacterControllerSystem
         {
             Vector2 move = MovementLocked ? Vector2.zero : _input.move;
             bool crouching = _input.crouch && Grounded;
-            float targetSpeed = (crouching ? CrouchSpeed : (_input.sprint ? SprintSpeed : MoveSpeed)) * SpeedScale;
+            // No crouch strafe clips: crouching keeps the normal turn-to-move behaviour.
+            IsStrafing = AllowStrafe && _input.strafe && !MovementLocked && !crouching && CameraTransform != null;
+
+            float sprintSpeed = IsStrafing ? StrafeSprintSpeed : SprintSpeed;
+            float targetSpeed = (crouching ? CrouchSpeed : (_input.sprint ? sprintSpeed : MoveSpeed)) * SpeedScale;
+            Vector3 inputDirection = new Vector3(move.x, 0.0f, move.y).normalized;
+            // Facing the camera, "back" on the stick walks backwards: slow that down.
+            if (IsStrafing) targetSpeed *= Mathf.Lerp(1f, StrafeBackwardScale, Mathf.Max(0f, -inputDirection.z));
 
             if (move == Vector2.zero) targetSpeed = 0.0f;
             TargetSpeed = targetSpeed;
@@ -240,26 +269,45 @@ namespace CharacterControllerSystem
             _animationBlend = Mathf.Lerp(_animationBlend, targetSpeed, Time.deltaTime * SpeedChangeRate);
             if (_animationBlend < 0.01f) _animationBlend = 0f;
 
-            Vector3 inputDirection = new Vector3(move.x, 0.0f, move.y).normalized;
-
             if (move != Vector2.zero && CameraTransform != null)
+                _moveRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
+                                CameraTransform.eulerAngles.y;
+
+            if (IsStrafing)
             {
-                _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg +
-                    CameraTransform.eulerAngles.y;
+                // Face where the camera looks, even standing still; move along the stick.
+                _targetRotation = CameraTransform.eulerAngles.y;
+                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
+                    ref _rotationVelocity, StrafeRotationSmoothTime);
+                transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
+            }
+            else if (move != Vector2.zero && CameraTransform != null)
+            {
+                _targetRotation = _moveRotation;
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation,
                     ref _rotationVelocity, RotationSmoothTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
             }
 
-            Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
+            Vector3 targetDirection = Quaternion.Euler(0.0f, _moveRotation, 0.0f) * Vector3.forward;
+            Vector3 planarVelocity = targetDirection.normalized * _speed;
 
-            _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) +
+            _controller.Move(planarVelocity * Time.deltaTime +
                 new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+
+            // Velocity in the character's frame, for the strafe blend (smoothed so direction changes blend).
+            Vector3 local = transform.InverseTransformDirection(planarVelocity);
+            LocalVelocity = Vector2.Lerp(LocalVelocity, new Vector2(local.x, local.z),
+                1f - Mathf.Exp(-SpeedChangeRate * Time.deltaTime));
+            if (LocalVelocity.sqrMagnitude < 0.0001f) LocalVelocity = Vector2.zero;
 
             if (_hasAnimator)
             {
                 _animator.SetFloat(_animSpeed, _animationBlend);
                 _animator.SetFloat(_animMotionSpeed, inputMagnitude);
+                _animator.SetBool(_animStrafing, IsStrafing);
+                _animator.SetFloat(_animStrafeX, LocalVelocity.x);
+                _animator.SetFloat(_animStrafeZ, LocalVelocity.y);
             }
         }
 

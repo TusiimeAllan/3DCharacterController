@@ -23,7 +23,9 @@ namespace CharacterControllerSystem.EditorTools
             "Idle", "Walking", "Running", "Sprint", "Female Walk", "Crawling",
             "Swimming", "Floating", "Falling", "Crouching Idle", "Crouch Walk",
             "Crouching", "Hanging Idle", "Braced Hang Shimmy", "Climbing Ladder",
-            "Hip Hop Dancing", "Punching Bag", "Talking", "Texting", "Sitting"
+            "Hip Hop Dancing", "Punching Bag", "Talking", "Texting", "Sitting",
+            "Strafe Walk Left", "Strafe Walk Right", "Strafe Walk Forward",
+            "Strafe Run Left", "Strafe Run Right", "Strafe Run Forward"
         };
 
         private bool IsArtFbx =>
