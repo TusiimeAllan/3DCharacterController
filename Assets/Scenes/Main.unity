@@ -273,6 +273,7 @@ MonoBehaviour:
   Input: {fileID: 500991566}
   Distance: 4
   MouseSensitivity: 1
+  GamepadLookRate: 60
   HeightOffset: 0
   TopClamp: 70
   BottomClamp: -30
@@ -280,6 +281,8 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   CollisionRadius: 0.2
+  MinDistance: 0.5
+  RecoverSpeed: 6
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
