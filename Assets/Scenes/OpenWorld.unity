@@ -42662,6 +42662,9 @@ MonoBehaviour:
   SightRadius: 0.06
   VerticalLag: 0.3
   VisibilityPullSpeed: 2.5
+  OcclusionPullSpeed: 6
+  GroundClearance: 0.35
+  MaxGroundLift: 30
 --- !u!1 &331614011
 GameObject:
   m_ObjectHideFlags: 0

@@ -93,7 +93,7 @@ namespace CharacterControllerSystem
         {
             _yaw = yaw;
             _pitch = pitch;
-            _autoYaw = _autoPitch = _targetAutoYaw = _targetAutoPitch = _autoYawVel = _autoPitchVel = 0f;
+            _autoYaw = _autoPitch = _targetAutoYaw = _targetAutoPitch = _autoYawVel = _autoPitchVel = _groundPitch = _groundPitchVel = 0f;
             _currentDistance = Distance;
             _pivotYReady = false;
         }
@@ -130,6 +130,13 @@ namespace CharacterControllerSystem
             if (!_pivotYReady) { _pivotY = targetY; _pivotYReady = true; }
             _pivotY = Mathf.SmoothDamp(_pivotY, targetY, ref _pivotYVelocity, relaxed || _relaxedHold > 0f ? VerticalLag : 0.05f);
             Vector3 pivot = new Vector3(Target.position.x, _pivotY, Target.position.z);
+            // Under a low roof (a tunnel, a crawlspace) the orbit point stays below it, or every cast starts
+            // inside the ceiling and the camera ends up in the player's head.
+            Vector3 low = Target.position + Vector3.up * 0.3f;
+            float above = pivot.y - low.y + CollisionRadius;
+            if (above > 0f && Physics.SphereCast(low, CollisionRadius * 0.5f, Vector3.up, out RaycastHit roof, above,
+                    CollisionLayers, QueryTriggerInteraction.Ignore) && !IsPlayer(roof.transform))
+                pivot.y = Mathf.Max(low.y, roof.point.y - CollisionRadius - 0.05f);
             int pointCount = GatherSightPoints();
             if (relaxed) pointCount = Mathf.Min(pointCount, 2);
 
@@ -139,6 +146,11 @@ namespace CharacterControllerSystem
             _autoPitch = Mathf.SmoothDamp(_autoPitch, _targetAutoPitch, ref _autoPitchVel, AutoSmoothTime);
 
             float pitch = Mathf.Clamp(_pitch + _autoPitch, BottomClamp, TopClamp);
+            // Low ground behind the player (steps, a curb, the deck above a swimmer): rise over it instead of
+            // being pushed in by it.
+            float liftTarget = GroundLift(pivot, pitch, _yaw + _autoYaw);
+            _groundPitch = Mathf.SmoothDamp(_groundPitch, liftTarget, ref _groundPitchVel, liftTarget > _groundPitch ? 0.12f : 0.5f);
+            pitch = Mathf.Clamp(pitch + _groundPitch, BottomClamp, TopClamp);
             Quaternion rotation = Quaternion.Euler(pitch, _yaw + _autoYaw, 0f);
             Vector3 back = -(rotation * Vector3.forward);
 
@@ -148,12 +160,29 @@ namespace CharacterControllerSystem
             if (KeepPlayerVisible && !relaxed && pointCount > 0 && Visible(pivot + back * geometry, pointCount) < pointCount)
                 targetDistance = ClosestVisibleDistance(pivot, back, geometry, pointCount);
 
-            if (geometry < _currentDistance)
-                _currentDistance = geometry; // a wall: snap in at once, never clip through
+            if (geometry < _currentDistance && CameraInside(pivot + back * _currentDistance))
+            {
+                _currentDistance = geometry; // the camera would be inside a wall: snap in, never clip through
+                DistanceMode = "inside geometry";
+            }
+            else if (geometry < _currentDistance)
+            {
+                // Only something in between (a post, a step, a ledge): close in quickly but smoothly.
+                _currentDistance = Mathf.MoveTowards(_currentDistance, geometry,
+                    Mathf.Clamp((_currentDistance - geometry) * 5f, 1.5f, OcclusionPullSpeed) * Time.deltaTime);
+                DistanceMode = "occluded";
+            }
             else if (targetDistance < _currentDistance)
+            {
                 _currentDistance = Mathf.Lerp(_currentDistance, targetDistance, 1f - Mathf.Exp(-VisibilityPullSpeed * Time.deltaTime));
+                DistanceMode = "visibility";
+            }
             else
+            {
                 _currentDistance = Mathf.Lerp(_currentDistance, targetDistance, 1f - Mathf.Exp(-RecoverSpeed * Time.deltaTime));
+                DistanceMode = "free";
+            }
+            if (pivot.y < _pivotY - 0.01f) DistanceMode += ", under roof";
 
             transform.position = pivot + back * _currentDistance;
             transform.rotation = rotation;
@@ -209,6 +238,42 @@ namespace CharacterControllerSystem
             seen = Visible(pivot + back * d, pointCount);
             ratio = d / Distance;
             return seen * 10f + (d / Distance) * 3f - Mathf.Abs(yawOffset) / 60f - pitchOffset / 50f;
+        }
+
+        [Tooltip("Speed (m/s) the camera closes in when geometry passes between it and the player")]
+        public float OcclusionPullSpeed = 6f;
+        /// <summary>Why the camera distance did what it did this frame (diagnostics).</summary>
+        public string DistanceMode { get; private set; } = "";
+        private readonly Collider[] _inside = new Collider[8];
+
+        /// <summary>Whether a camera at this position would be inside (or touching) level geometry.</summary>
+        private bool CameraInside(Vector3 position)
+        {
+            int n = Physics.OverlapSphereNonAlloc(position, CollisionRadius, _inside, CollisionLayers, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < n; i++)
+                if (_inside[i] != null && !IsPlayer(_inside[i].transform)) return true;
+            return false;
+        }
+
+        [Tooltip("Height the camera keeps above the ground under it (it tilts up to stay above steps and ledges)")]
+        public float GroundClearance = 0.35f;
+        [Tooltip("Most the camera tilts up to clear the ground behind the player (degrees)")]
+        public float MaxGroundLift = 30f;
+        private float _groundPitch, _groundPitchVel;
+
+        /// <summary>Extra downward pitch (degrees) that keeps the camera above the ground under where it would sit.</summary>
+        private float GroundLift(Vector3 pivot, float pitch, float yaw)
+        {
+            Vector3 back = -(Quaternion.Euler(pitch, yaw, 0f) * Vector3.forward);
+            Vector3 cam = pivot + back * Distance;
+            // Find the ground under the camera, starting from the orbit point's height (never a roof above it).
+            Vector3 from = new Vector3(cam.x, pivot.y, cam.z);
+            if (!Physics.SphereCast(from, CollisionRadius * 0.5f, Vector3.down, out RaycastHit ground, pivot.y - cam.y + GroundClearance + 1f,
+                    CollisionLayers, QueryTriggerInteraction.Ignore) || IsPlayer(ground.transform)) return 0f;
+            float minY = ground.point.y + GroundClearance;
+            if (cam.y >= minY) return 0f;
+            float needed = Mathf.Asin(Mathf.Clamp((minY - pivot.y) / Distance, -1f, 1f)) * Mathf.Rad2Deg;
+            return Mathf.Clamp(needed - pitch, 0f, MaxGroundLift);
         }
 
         private float CollisionDistance(Vector3 pivot, Vector3 back, float distance)

@@ -427,10 +427,15 @@ namespace CharacterControllerSystem
                 Vector3 delta = position - transform.position;
                 delta.y = -3f * dt;
                 // The recording stands up at the end; under a low roof, end here and let the crouch take over.
-                if (p > 0.5f && Physics.Raycast(transform.position + Vector3.up * 0.5f, Vector3.up,
-                        Controller.StandingHeight - 0.4f, Controller.GroundLayers, QueryTriggerInteraction.Ignore))
+                // Look above and just ahead, so the hand-over happens before the chest rises into the roof.
+                if (p > 0.45f && (RoofAbove(transform.position) || RoofAbove(transform.position + _forward * 0.6f)))
                 {
                     Finish();
+                    // Straight into the crouch: going back through the standing pose would put the chest in the roof.
+                    if (_mm != null && _mm.isActiveAndEnabled && _mm.TryGetControllerLayer(out AnimatorControllerPlayable crouchLayer))
+                        crouchLayer.CrossFadeInFixedTime(CrouchState, 0.1f, 0);
+                    else if (_animator != null && _animator.runtimeAnimatorController != null)
+                        _animator.CrossFadeInFixedTime(CrouchState, 0.1f, 0);
                     return;
                 }
                 Vector3 before = transform.position;
@@ -492,6 +497,12 @@ namespace CharacterControllerSystem
         }
 
         /// <summary>Cross-fades into the move's state at an exact clip time (so a shortened run-up matches).</summary>
+        private const string CrouchState = "Crouch";
+
+        private bool RoofAbove(Vector3 at) =>
+            Physics.Raycast(at + Vector3.up * 0.5f, Vector3.up, Controller.StandingHeight - 0.4f, Controller.GroundLayers,
+                QueryTriggerInteraction.Ignore);
+
         private void PlayState(ParkourMove move, float clipTime)
         {
             const float fade = 0.12f;

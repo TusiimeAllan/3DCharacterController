@@ -168,6 +168,7 @@ namespace CharacterControllerSystem
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
             _layerWeight = duration <= 0f ? target : Mathf.MoveTowards(_layerWeight, target, Time.deltaTime / duration);
             Mxm.SetControllerLayerWeight(_layerWeight);
+            MatchPlaybackToSpeed(useController);
 
             _controllerLayer.SetFloat(SpeedId, Controller.AnimationBlend);
             _controllerLayer.SetFloat(MotionSpeedId, Controller.InputMagnitude);
@@ -181,6 +182,32 @@ namespace CharacterControllerSystem
             _controllerLayer.SetFloat(StrafeZId, Controller.LocalVelocity.y);
             _controllerLayer.SetInteger(StrafeTurnId, Controller.StrafeTurn);
             _controllerLayer.SetBool(SlopeSlideId, Controller.IsSlidingOnSlope);
+        }
+
+        [Tooltip("Plays motion matched clips faster or slower so the feet keep pace with the body (min, max)")]
+        public Vector2 StrideMatchLimits = new Vector2(0.8f, 1.4f);
+        private float _strideScale = 1f;
+        private CharacterController _body;
+
+        /// <summary>
+        /// The controller sets the speed, not the recording, so a 1.5 m/s walk clip under a 2 m/s body slides its
+        /// planted feet. Scaling the playback by body speed over the pose's recorded speed keeps the stride in step.
+        /// </summary>
+        private void MatchPlaybackToSpeed(bool onController)
+        {
+            if (_body == null) _body = GetComponent<CharacterController>();
+            float target = 1f;
+            if (!onController && _body != null && Controller.Grounded)
+            {
+                Vector3 recorded = Mxm.CurrentInterpolatedPose.LocalVelocity;
+                recorded.y = 0f;
+                Vector3 actual = _body.velocity;
+                actual.y = 0f;
+                if (recorded.magnitude > 0.4f && actual.magnitude > 0.3f)
+                    target = Mathf.Clamp(actual.magnitude / recorded.magnitude, StrideMatchLimits.x, StrideMatchLimits.y);
+            }
+            _strideScale = Mathf.MoveTowards(_strideScale, target, 2f * Time.deltaTime);
+            Mxm.UserPlaybackSpeedMultiplier = _strideScale;
         }
 
         public void SetMode(bool useMotionMatching)

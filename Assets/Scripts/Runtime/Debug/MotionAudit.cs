@@ -43,6 +43,7 @@ namespace CharacterControllerSystem.Diagnostics
             public int Frames, Teleports, RotationSnaps, Floats, Sinks, SlideFrames, PlantedFrames, Hidden, StateChanges;
             public float MaxTeleport, MaxSpin, MaxFloat, MaxSink, SlideSum, MinCamera = 99f, MaxCameraIn;
             public float MaxPenetration;
+            public string CameraWhy = "";
             public string PenetrationWhere = "";
             public readonly List<string> Notes = new List<string>();
         }
@@ -248,16 +249,18 @@ namespace CharacterControllerSystem.Diagnostics
                 // true shortest way out, so an elbow just past a front face is not counted as deep under the top.
                 if (Physics.Raycast(p + Vector3.up * 0.6f, Vector3.down, out RaycastHit floor, 0.6f + radius, _tpc.GroundLayers,
                         QueryTriggerInteraction.Ignore) && !floor.transform.IsChildOf(_in.transform) && floor.normal.y > 0.6f &&
-                    !(floor.collider is BoxCollider) && !(floor.collider is CapsuleCollider) && !(floor.collider is SphereCollider))
+                    floor.collider is TerrainCollider)
+                {
+                    if (floor.point.y + radius - p.y > depth) what = floor.collider.name;
                     depth = Mathf.Max(depth, floor.point.y + radius - p.y);
+                }
                 _probe.radius = radius;
                 int n = Physics.OverlapSphereNonAlloc(p, radius, _hits, _tpc.GroundLayers, QueryTriggerInteraction.Ignore);
                 for (int i = 0; i < n; i++)
                 {
                     var c = _hits[i];
                     if (c == null || c.transform.IsChildOf(_in.transform) || c == _probe) continue;
-                    if (Physics.ComputePenetration(_probe, p, Quaternion.identity, c, c.transform.position, c.transform.rotation,
-                            out Vector3 dir, out float dist) && (dir.y < 0.6f || c is BoxCollider))
+                    if (BodyContactSolver.SpherePenetration(c, _probe, p, radius, out Vector3 dir, out float dist))
                     {
                         if (dist > depth) what = c.name;
                         depth = Mathf.Max(depth, dist); // walls (floors are measured from above)
@@ -267,11 +270,11 @@ namespace CharacterControllerSystem.Diagnostics
                 if (depth > _s.MaxPenetration)
                 {
                     _s.MaxPenetration = depth;
-                    string ledge = "";
+                    string ledge = ", " + what;
                     if (_pk != null && _pk.IsActive && _pk.HasLedge)
                     {
                         Vector3 rel = p - _pk.LedgePoint;
-                        ledge = $", {what}, p {_pk.Progress:F2}, {Vector3.Dot(rel, _pk.LedgeFace):F2} past face, {rel.y:F2} vs top";
+                        ledge += $", p {_pk.Progress:F2}, {Vector3.Dot(rel, _pk.LedgeFace):F2} past face, {rel.y:F2} vs top";
                     }
                     _s.PenetrationWhere = $"{bone} {depth * 100f:F0} cm in ({state}{ledge})";
                 }
@@ -284,25 +287,30 @@ namespace CharacterControllerSystem.Diagnostics
                           !(_swim != null && (_swim.IsSwimming || _swim.IsWading)) && !(_mm != null && _mm.InLandingState);
             float lowestGap = float.MaxValue;
             int lowest = -1;
+            var gaps = new float[] { float.MaxValue, float.MaxValue };
+            var feet = new Transform[2];
             for (int k = 0; k < 2; k++)
             {
                 var foot = _anim.GetBoneTransform(k == 0 ? HumanBodyBones.LeftFoot : HumanBodyBones.RightFoot);
+                feet[k] = foot;
                 if (foot == null) continue;
                 float sole = foot.position.y - (k == 0 ? _anim.leftFeetBottomHeight : _anim.rightFeetBottomHeight);
                 if (!Physics.Raycast(foot.position + Vector3.up * 0.5f, Vector3.down, out RaycastHit g, 1.5f, _tpc.GroundLayers,
                         QueryTriggerInteraction.Ignore)) continue;
-                float gap = sole - g.point.y;
-                if (gap < lowestGap) { lowestGap = gap; lowest = k; }
-                if (normal && _hasLast && gap < 0.03f)
-                {
-                    Vector3 v = (foot.position - _lastFoot[k]) / dt;
-                    v.y = 0f;
-                    _s.PlantedFrames++;
-                    _s.SlideSum += v.magnitude;
-                    if (v.magnitude > 0.35f) _s.SlideFrames++;
-                }
-                _lastFoot[k] = foot.position;
+                gaps[k] = sole - g.point.y;
+                if (gaps[k] < lowestGap) { lowestGap = gaps[k]; lowest = k; }
             }
+            // The supporting foot (the lower one, on the ground) is the one that must not slide; the other may be
+            // skimming the ground on its way forward.
+            if (normal && _hasLast && lowest >= 0 && gaps[lowest] < 0.03f && feet[lowest] != null)
+            {
+                Vector3 v = (feet[lowest].position - _lastFoot[lowest]) / dt;
+                v.y = 0f;
+                _s.PlantedFrames++;
+                _s.SlideSum += v.magnitude;
+                if (v.magnitude > 0.35f) _s.SlideFrames++;
+            }
+            for (int k = 0; k < 2; k++) if (feet[k] != null) _lastFoot[k] = feet[k].position;
             if (!normal || lowest < 0) return;
             Vector3 vel = _cc.velocity;
             vel.y = 0f;
@@ -315,7 +323,11 @@ namespace CharacterControllerSystem.Diagnostics
             if (_cam == null) return;
             float d = Vector3.Distance(_cam.transform.position, _cam.Target.position);
             _s.MinCamera = Mathf.Min(_s.MinCamera, d);
-            if (_hasLast) _s.MaxCameraIn = Mathf.Max(_s.MaxCameraIn, (_lastCam - d) / dt);
+            if (_hasLast && (_lastCam - d) / dt > _s.MaxCameraIn)
+            {
+                _s.MaxCameraIn = (_lastCam - d) / dt;
+                _s.CameraWhy = _cam.DistanceMode;
+            }
             if (!_cam.PlayerFullyVisible) _s.Hidden++;
             _lastCam = d;
         }
@@ -349,7 +361,7 @@ namespace CharacterControllerSystem.Diagnostics
             float slide = s.PlantedFrames > 0 ? (float)s.SlideFrames / s.PlantedFrames : 0f;
             if (slide > 0.35f) flags.Add($"FOOT SLIDE {slide * 100f:F0}% of planted frames (avg {s.SlideSum / Mathf.Max(1, s.PlantedFrames):F2} m/s)");
             if (s.MinCamera < 1.5f) flags.Add($"CAMERA CLOSE {s.MinCamera:F2} m");
-            if (s.MaxCameraIn > 6f) flags.Add($"CAMERA LURCH {s.MaxCameraIn:F1} m/s");
+            if (s.MaxCameraIn > 6f) flags.Add($"CAMERA LURCH {s.MaxCameraIn:F1} m/s ({s.CameraWhy})");
             float hidden = s.Frames > 0 ? (float)s.Hidden / s.Frames : 0f;
             if (hidden > 0.1f) flags.Add($"PLAYER HIDDEN {hidden * 100f:F0}% of frames");
             string verdict = flags.Count == 0 ? "OK" : string.Join(" | ", flags);

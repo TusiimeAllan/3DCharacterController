@@ -100,6 +100,7 @@ namespace CharacterControllerSystem
             float dt = Time.deltaTime;
 
             if (EnableDepenetration) Depenetrate(dt);
+            if (EnableDepenetration) DuckUnderCeiling(dt);
             if (EnableHandPlanting)
             {
                 if (_climb != null && _climb.Current == ClimbController.State.Ladder && _climb.CurrentLadder != null)
@@ -175,6 +176,68 @@ namespace CharacterControllerSystem
                 _push[axis] = grow ? w : Mathf.Lerp(c, w, 1f - Mathf.Exp(-RecoverRate * dt));
             }
             if (_push.sqrMagnitude > 1e-8f && hips != null) hips.position += _push;
+        }
+
+        // ---------------------------------------------------------------- low ceilings
+
+        private float _duck;
+        private static readonly (HumanBodyBones bone, float radius)[] UpperProbes =
+        {
+            (HumanBodyBones.Head, 0.1f), (HumanBodyBones.Chest, 0.13f), (HumanBodyBones.UpperChest, 0.12f),
+            (HumanBodyBones.LeftUpperArm, 0.06f), (HumanBodyBones.RightUpperArm, 0.06f),
+        };
+
+        /// <summary>How far the upper body reaches into the ceiling above it (0 when clear).</summary>
+        private float CeilingOverlap(float hipsY)
+        {
+            float worst = 0f;
+            foreach (var (bone, radius) in UpperProbes)
+            {
+                var t = _animator.GetBoneTransform(bone);
+                if (t == null) continue;
+                Vector3 p = t.position;
+                Vector3 from = new Vector3(p.x, hipsY, p.z);
+                if (p.y - radius <= hipsY) continue;
+                if (Physics.SphereCast(from, radius, Vector3.up, out RaycastHit roof, 2.5f, Controller.GroundLayers,
+                        QueryTriggerInteraction.Ignore) && !roof.transform.IsChildOf(transform) && roof.normal.y < -0.3f)
+                    worst = Mathf.Max(worst, (p.y - hipsY) - roof.distance);
+            }
+            return worst;
+        }
+
+        /// <summary>
+        /// Under a roof lower than the pose (a crouch in a tunnel), bend forward at the spine until the head and
+        /// chest clear it. The angle is found by bisection on the real pose, eased out when the roof ends.
+        /// </summary>
+        private void DuckUnderCeiling(float dt)
+        {
+            var hips = _animator.GetBoneTransform(HumanBodyBones.Hips);
+            var spine = _animator.GetBoneTransform(HumanBodyBones.Spine);
+            if (hips == null || spine == null || (_swim != null && _swim.IsSwimming) ||
+                (_climb != null && _climb.IsClimbing) || (Parkour != null && Parkour.IsActive))
+            {
+                _duck = Mathf.MoveTowards(_duck, 0f, 90f * dt);
+                return;
+            }
+            Vector3 axis = transform.right;
+            Quaternion rest = spine.rotation;
+            float needed = 0f;
+            if (CeilingOverlap(hips.position.y) > 0.005f)
+            {
+                float lo = 0f, hi = 50f;
+                for (int i = 0; i < 6; i++)
+                {
+                    float mid = (lo + hi) * 0.5f;
+                    spine.rotation = Quaternion.AngleAxis(mid, axis) * rest;
+                    if (CeilingOverlap(hips.position.y) > 0.005f) lo = mid;
+                    else hi = mid;
+                }
+                needed = hi;
+                spine.rotation = rest;
+            }
+            // Duck at once (never show the overlap), straighten up gently.
+            _duck = needed >= _duck ? needed : Mathf.MoveTowards(_duck, needed, 90f * dt);
+            if (_duck > 0.01f) spine.rotation = Quaternion.AngleAxis(_duck, axis) * rest;
         }
 
         // ---------------------------------------------------------------- hands
@@ -277,11 +340,51 @@ namespace CharacterControllerSystem
             return null;
         }
 
+        /// <summary>
+        /// Sphere against a collider, including a sphere deep inside a closed mesh (a non-convex mesh collider is
+        /// only a shell to the physics queries). Mesh colliders are measured as their mesh's bounding box, which
+        /// is exact for the box shaped blocks levels are built from.
+        /// </summary>
+        public static bool SpherePenetration(Collider c, SphereCollider probe, Vector3 p, float radius,
+            out Vector3 dir, out float depth)
+        {
+            dir = Vector3.zero;
+            depth = 0f;
+            if (c is MeshCollider mc && !mc.convex && mc.sharedMesh != null)
+            {
+                Transform t = c.transform;
+                Bounds b = mc.sharedMesh.bounds;
+                Vector3 center = t.TransformPoint(b.center);
+                Vector3 scale = t.lossyScale;
+                Vector3[] axes = { t.right, t.up, t.forward };
+                float[] half = { Mathf.Abs(b.extents.x * scale.x), Mathf.Abs(b.extents.y * scale.y), Mathf.Abs(b.extents.z * scale.z) };
+                float best = float.MaxValue;
+                for (int i = 0; i < 3; i++)
+                {
+                    float d = Vector3.Dot(p - center, axes[i]);
+                    float pen = half[i] + radius - Mathf.Abs(d);
+                    if (pen <= 0f) return false;
+                    if (pen < best)
+                    {
+                        best = pen;
+                        dir = axes[i] * (d >= 0f ? 1f : -1f);
+                    }
+                }
+                depth = best;
+                return true;
+            }
+            probe.radius = radius;
+            return Physics.ComputePenetration(probe, p, Quaternion.identity, c, c.transform.position, c.transform.rotation,
+                out dir, out depth);
+        }
+
         /// <summary>How far a sphere at p sits inside the obstacle (0 when clear), and the way out.</summary>
         private float InsideObstacle(Vector3 p, float radius, out Vector3 way)
         {
             way = Vector3.zero;
             if (_obstacle == null) return 0f;
+            if (_obstacle is MeshCollider)
+                return SpherePenetration(_obstacle, _probe, p, radius, out way, out float boxDepth) ? boxDepth : 0f;
             _probe.radius = radius;
             if (!Physics.ComputePenetration(_probe, p, Quaternion.identity, _obstacle,
                     _obstacle.transform.position, _obstacle.transform.rotation, out Vector3 dir, out float dist)) return 0f;
