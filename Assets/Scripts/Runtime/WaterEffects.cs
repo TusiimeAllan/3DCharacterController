@@ -15,6 +15,8 @@ namespace CharacterControllerSystem
         [Range(0f, 1f)] public float Volume = 0.8f;
 
         private ParticleSystem _splash;
+        private ParticleSystem _bubbles;
+        private ParticleSystem _drips;
         private AudioSource _audio;
         private static AudioClip _splashClip;
         private static AudioClip _strokeClip;
@@ -29,6 +31,26 @@ namespace CharacterControllerSystem
             if (_splashClip == null) _splashClip = MakeSplashClip();
             if (_strokeClip == null) _strokeClip = MakeStrokeClip();
             _splash = MakeParticles();
+            _bubbles = MakeBubbles();
+            _drips = MakeDrips();
+        }
+
+        /// <summary>Bubbles rising from a point under water; they burst at the surface.</summary>
+        public void Bubbles(Vector3 position, int count, float surfaceY)
+        {
+            if (_bubbles == null || count <= 0) return;
+            float rise = Mathf.Max(0.05f, surfaceY - position.y);
+            var main = _bubbles.main;
+            // Live just long enough to reach the surface at their rise speed.
+            main.startLifetime = new ParticleSystem.MinMaxCurve(rise / 1.3f, rise / 0.8f);
+            _bubbles.Emit(new ParticleSystem.EmitParams { applyShapeToPosition = true, position = position }, count);
+        }
+
+        /// <summary>One drop of water falling from a wet body.</summary>
+        public void Drip(Vector3 position)
+        {
+            if (_drips == null) return;
+            _drips.Emit(new ParticleSystem.EmitParams { applyShapeToPosition = false, position = position, velocity = Vector3.down * 0.2f }, 1);
         }
 
         /// <summary>Splash at a point on the surface; strength 0..1 (a dive or fall is about 1).</summary>
@@ -112,6 +134,75 @@ namespace CharacterControllerSystem
                 var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
                 if (shader != null) SplashMaterial = new Material(shader);
             }
+            renderer.sharedMaterial = SplashMaterial;
+            return ps;
+        }
+
+        private ParticleSystem MakeBubbles()
+        {
+            var ps = NewSystem("Bubbles", 300);
+            var main = ps.main;
+            main.startSpeed = 0f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.025f, 0.07f);
+            main.gravityModifier = 0f;
+            main.startColor = new Color(0.8f, 0.95f, 1f, 0.55f);
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.08f;
+            // Rise with a wobble.
+            var velocity = ps.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.space = ParticleSystemSimulationSpace.World;
+            velocity.x = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.8f, 1.3f);
+            velocity.z = new ParticleSystem.MinMaxCurve(-0.08f, 0.08f);
+            var noise = ps.noise;
+            noise.enabled = true;
+            noise.strength = 0.15f;
+            noise.frequency = 1.5f;
+            var size = ps.sizeOverLifetime;
+            size.enabled = true;
+            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.7f, 1f, 1.3f));
+            return ps;
+        }
+
+        private ParticleSystem MakeDrips()
+        {
+            var ps = NewSystem("Drips", 200);
+            var main = ps.main;
+            main.startSpeed = 0f;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.012f, 0.025f);
+            main.gravityModifier = 1f;
+            main.startColor = new Color(0.8f, 0.9f, 1f, 0.75f);
+            // Drops are stretched along their fall.
+            var renderer = ps.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.velocityScale = 0.04f;
+            renderer.lengthScale = 1.5f;
+            var collision = ps.collision;
+            collision.enabled = true;
+            collision.type = ParticleSystemCollisionType.World;
+            collision.mode = ParticleSystemCollisionMode.Collision3D;
+            collision.lifetimeLoss = 1f; // gone on touching the ground
+            collision.quality = ParticleSystemCollisionQuality.Low;
+            return ps;
+        }
+
+        private ParticleSystem NewSystem(string name, int max)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            var main = ps.main;
+            main.playOnAwake = false;
+            main.loop = false;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.maxParticles = max;
+            var emission = ps.emission;
+            emission.enabled = false;
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
             renderer.sharedMaterial = SplashMaterial;
             return ps;
         }

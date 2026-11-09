@@ -56,6 +56,17 @@ namespace CharacterControllerSystem
         [Tooltip("Closest the capsule's base comes to the bottom while diving (m)")]
         public float MinFloorClearance = 0.75f;
 
+        [Header("Breath")]
+        [Tooltip("Seconds of breath under water")]
+        public float BreathSeconds = 20f;
+        [Tooltip("Seconds to get a full breath back at the surface")]
+        public float RefillSeconds = 4f;
+        [Tooltip("Damage taken each DrownInterval once breath runs out (the character also rises)")]
+        public float DrownDamage = 10f;
+        public float DrownInterval = 1.5f;
+        [Tooltip("Seconds between exhaled bubbles under water")]
+        public Vector2 ExhaleInterval = new Vector2(2.2f, 3.8f);
+
         [Header("Wading")]
         [Tooltip("Water shallower than this does not slow walking (m)")]
         public float WadeStartDepth = 0.3f;
@@ -71,6 +82,8 @@ namespace CharacterControllerSystem
         public bool IsUnderwater { get; private set; }
         public bool IsWading { get; private set; }
         public float SwimSpeedNow => _velocity.magnitude;
+        /// <summary>Breath left, 0..1.</summary>
+        public float Breath { get; private set; } = 1f;
 
         private static readonly int SwimmingId = Animator.StringToHash("Swimming");
         private static readonly int SwimSpeedId = Animator.StringToHash("SwimSpeed");
@@ -88,6 +101,13 @@ namespace CharacterControllerSystem
         private float _pitch;
         private float _effectTimer;
         private float _stepOffset = 0.3f;
+        private float _drownTimer = 1.5f;
+        private bool _gasping;
+        private bool _diveLocked;
+        private ThirdPersonCamera _camera;
+        private float _exhaleTimer = 2f;
+        private CharacterWetness _wet;
+        private CharacterActions _actions;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
 
         private void Awake()
@@ -100,12 +120,18 @@ namespace CharacterControllerSystem
             _cc = GetComponent<CharacterController>();
             _animator = GetComponent<Animator>();
             _mm = GetComponent<MotionMatchingLocomotion>();
+            _actions = GetComponent<CharacterActions>();
+            _wet = GetComponent<CharacterWetness>();
+            if (_wet == null) _wet = gameObject.AddComponent<CharacterWetness>();
+            if (_wet.Effects == null) _wet.Effects = Effects;
         }
 
         private void Start()
         {
             var cam = Camera.main;
             if (cam != null && cam.GetComponent<UnderwaterCamera>() == null) cam.gameObject.AddComponent<UnderwaterCamera>();
+            var meter = new GameObject("BreathMeter").AddComponent<BreathMeter>();
+            meter.Swim = this;
         }
 
         private void OnDisable()
@@ -118,6 +144,12 @@ namespace CharacterControllerSystem
         {
             if (Controller == null || _inputs == null || _cc == null) return;
             float dt = Time.deltaTime;
+            UpdateBreath(dt);
+            if (_wet != null)
+            {
+                _wet.InWater = IsSwimming || IsWading;
+                if (IsSwimming) _wet.SoakTo(1f);
+            }
             if (!IsSwimming)
             {
                 if (_cooldown > 0f) _cooldown -= dt;
@@ -171,17 +203,22 @@ namespace CharacterControllerSystem
 
             float floatY = _water.SurfaceY - _floatDepth;
             float dy;
-            if (!IsUnderwater && EnableDiving && _inputs.crouchHeld)
+            if (!_inputs.crouchHeld) _diveLocked = false;
+            if (!IsUnderwater && EnableDiving && _inputs.crouchHeld && !_diveLocked)
             {
                 IsUnderwater = true;
                 _verticalSpeed = 0f;
                 Effects?.Stroke(new Vector3(pos.x, _water.SurfaceY, pos.z), 0.6f);
+                Effects?.Bubbles(pos + Vector3.up * 0.4f, 14, _water.SurfaceY);
             }
 
             if (IsUnderwater)
             {
                 float wanted = (_inputs.jumpHeld ? DiveSpeed : 0f) - (_inputs.crouchHeld ? DiveSpeed : 0f);
                 if (wanted == 0f) wanted = Buoyancy;
+                if (Breath <= 0f) _gasping = true;
+                if (_gasping) wanted = DiveSpeed; // out of breath: straight up until the head is out
+                UnderwaterBubbles(pos, dt);
                 _verticalSpeed = Mathf.MoveTowards(_verticalSpeed, wanted, 4f * dt);
                 dy = _verticalSpeed * dt;
                 // Keep clear of the bottom (the pitched body reaches below the capsule's base); level out there.
@@ -190,8 +227,12 @@ namespace CharacterControllerSystem
                     dy = Mathf.Max(0f, floorY + MinFloorClearance - pos.y) * (1f - Mathf.Exp(-6f * dt));
                     if (_verticalSpeed < 0f) _verticalSpeed = 0f;
                 }
-                if (pos.y + dy >= floatY && _verticalSpeed > 0f)
+                var headBone = _animator != null ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
+                bool headOut = headBone != null && headBone.position.y > _water.SurfaceY + 0.05f;
+                if ((pos.y + dy >= floatY || headOut) && _verticalSpeed > 0f)
                 {
+                    if (_gasping) _diveLocked = true; // catch a breath: let go of Crouch before diving again
+                    _gasping = false;
                     // Back at the surface.
                     IsUnderwater = false;
                     dy = floatY - pos.y;
@@ -235,6 +276,7 @@ namespace CharacterControllerSystem
         {
             float depth = water != null ? water.SurfaceY - transform.position.y : 0f;
             IsWading = water != null && depth > WadeStartDepth && Controller.Grounded;
+            if (IsWading && _wet != null) _wet.SoakTo(Mathf.Clamp01(depth / 1.6f) * 0.9f);
             Controller.WadeSpeedFactor = IsWading
                 ? Mathf.Lerp(1f, WadeMinSpeed, Mathf.InverseLerp(WadeStartDepth, EnterDepth, depth))
                 : 1f;
@@ -247,6 +289,69 @@ namespace CharacterControllerSystem
             _effectTimer = WadeStepInterval * Mathf.Clamp(1.5f / v.magnitude, 0.6f, 1.4f);
             Vector3 p = transform.position + v.normalized * 0.3f;
             Effects?.Stroke(new Vector3(p.x, water.SurfaceY, p.z), 0.2f + 0.3f * Mathf.InverseLerp(WadeStartDepth, EnterDepth, depth));
+        }
+
+        private void UpdateBreath(float dt)
+        {
+            bool headUnder = false;
+            if (IsSwimming && IsUnderwater && _water != null)
+            {
+                var head = _animator != null ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
+                headUnder = head == null || head.position.y < _water.SurfaceY;
+            }
+            if (headUnder)
+            {
+                Breath = Mathf.Max(0f, Breath - dt / Mathf.Max(1f, BreathSeconds));
+                if (Breath <= 0f)
+                {
+                    _drownTimer -= dt;
+                    if (_drownTimer <= 0f)
+                    {
+                        _drownTimer = DrownInterval;
+                        if (_actions != null && _actions.isActiveAndEnabled && !_actions.IsDead)
+                            _actions.TakeHit(DrownDamage, false);
+                    }
+                }
+            }
+            else
+            {
+                Breath = Mathf.Min(1f, Breath + dt / Mathf.Max(0.5f, RefillSeconds));
+                // A bob above the surface while out of breath is not a breath: keep the timer running.
+                if (Breath > 0.05f) _drownTimer = DrownInterval;
+            }
+
+            // Dive the camera with the swimmer: orbit the head rather than the standing-height socket.
+            if (_camera == null) _camera = FindAnyObjectByType<ThirdPersonCamera>();
+            if (_camera != null && _camera.Target != null)
+            {
+                float wanted = 0f;
+                var head = _animator != null ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
+                if (IsSwimming && IsUnderwater && head != null) wanted = head.position.y + 0.15f - _camera.Target.position.y;
+                _camera.PivotOffset = Mathf.Lerp(_camera.PivotOffset, Mathf.Min(0f, wanted), 1f - Mathf.Exp(-4f * dt));
+            }
+        }
+
+        /// <summary>Exhaled bubbles from the head now and then, and a few from the hands on each stroke.</summary>
+        private void UnderwaterBubbles(Vector3 pos, float dt)
+        {
+            if (Effects == null || _animator == null) return;
+            _exhaleTimer -= dt;
+            if (_exhaleTimer <= 0f)
+            {
+                _exhaleTimer = Random.Range(ExhaleInterval.x, ExhaleInterval.y) * (Breath < 0.25f ? 0.4f : 1f);
+                var head = _animator.GetBoneTransform(HumanBodyBones.Head);
+                if (head != null) Effects.Bubbles(head.position + transform.forward * 0.12f, Random.Range(5, 10), _water.SurfaceY);
+            }
+            float speed = _velocity.magnitude + Mathf.Abs(_verticalSpeed);
+            if (speed < 0.4f) return;
+            _effectTimer -= dt;
+            if (_effectTimer > 0f) return;
+            _effectTimer = StrokeInterval * Mathf.Clamp(SwimSpeed / speed, 0.6f, 1.4f);
+            foreach (var b in new[] { HumanBodyBones.LeftHand, HumanBodyBones.RightHand })
+            {
+                var hand = _animator.GetBoneTransform(b);
+                if (hand != null) Effects.Bubbles(hand.position, Random.Range(2, 4), _water.SurfaceY);
+            }
         }
 
         private void StrokeEffects(Vector3 pos, float dt)
