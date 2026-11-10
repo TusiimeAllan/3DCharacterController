@@ -17,7 +17,7 @@ namespace CharacterControllerSystem
     /// </summary>
     [DefaultExecutionOrder(90)] // before LocomotionAnimationHost reads NeedsControllerLayer
     [DisallowMultipleComponent]
-    public class CharacterActions : MonoBehaviour
+    public class CharacterActions : MonoBehaviour, IBodyScaled
     {
         public enum ActionId
         {
@@ -401,6 +401,17 @@ namespace CharacterControllerSystem
         {
             if (_mm != null) { if (_mm.TryGetControllerLayer(out var l)) l.SetTrigger(id); }
             else if (_animator != null) _animator.SetTrigger(id);
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            PushSpeed *= k;
+            _bs = s;
         }
     }
 }

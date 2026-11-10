@@ -2,52 +2,40 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using static CharacterControllerSystem.EditorTools.AnimatorBuildUtil;
 
 namespace CharacterControllerSystem.EditorTools
 {
     /// <summary>
-    /// Adds the CharacterActions states to the Player Animator Controller, using the Universal Animation
-    /// Library (CC0) plus one Mixamo death:
-    ///   Any State -> Death A (UAL Death01) / Death B (Mixamo Dying Backwards), back to Locomotion on revive
+    /// Adds the CharacterActions states:
+    ///   Any State -> Death A / Death B, back to Locomotion on revive
     ///   Locomotion -> SitEnter -> SitIdle -> SitExit
     ///   Locomotion -> Interact, PickUp, Jab, Cross, Repair (one-shots, tag "Action")
     ///   Locomotion -> Dance, Talk (loops, tag "Emote"), Push (loop while pushing, tag "Push")
-    ///   UpperBody layer: Hit Chest / Hit Head, used when motion matching is not hosting the controller.
-    /// Edits the controller in place and is safe to re-run. Also adds CharacterActions to the Player prefab.
+    ///   UpperBody layer: Hit Chest / Hit Head, used when no locomotion host plays them.
+    /// Edits the controller in place and is safe to re-run.
     /// </summary>
     public static class ActionStatesBuilder
     {
         private const string Tag = "[ActionStatesBuilder]";
-        private const string UalPath = "Assets/Art/Animations/UAL/UAL1_Standard.fbx";
-        private const string DyingBackwardsPath = "Assets/Art/Animations/XBot/X Bot@Dying Backwards.fbx";
-        private const string ControllerPath = "Assets/Art/Animations/PlayerAnimator.controller";
-        private const string MaskPath = "Assets/Art/Animations/UpperBody.mask";
-        private const string PlayerPrefab = "Assets/Art/Characters/Player.prefab";
         private const string HitLayerName = "UpperBody Hits";
 
-        [MenuItem("Tools/Character Controller/Add Actions (Hits, Death, Sit, Emotes, Push)")]
-        public static void BuildDefault()
-        {
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
-            if (!Apply(controller)) return;
-            SetUpPlayer();
-        }
-
-        public static bool Apply(AnimatorController controller)
+        public static bool Apply(AnimatorController controller, CharacterSetupProfile p)
         {
             var clips = new (string state, AnimationClip clip)[]
             {
-                ("Death A", Ual("Death01")), ("Death B", Clip(DyingBackwardsPath, "Dying Backwards")),
-                ("SitEnter", Ual("Sitting_Enter")), ("SitIdle", Ual("Sitting_Idle_Loop")), ("SitExit", Ual("Sitting_Exit")),
-                ("Interact", Ual("Interact")), ("PickUp", Ual("PickUp_Table")), ("Jab", Ual("Punch_Jab")),
-                ("Cross", Ual("Punch_Cross")), ("Repair", Ual("Fixing_Kneeling")), ("Dance", Ual("Dance_Loop")),
-                ("Talk", Ual("Idle_Talking_Loop")), ("Push", Ual("Push_Loop")),
-                ("Hit Chest", Ual("Hit_Chest")), ("Hit Head", Ual("Hit_Head")),
+                ("Death A", p.DeathA), ("Death B", p.DeathB),
+                ("SitEnter", p.SitEnter), ("SitIdle", p.SitIdle), ("SitExit", p.SitExit),
+                ("Interact", p.Interact), ("PickUp", p.PickUp), ("Jab", p.Jab), ("Cross", p.Cross), ("Repair", p.Repair),
+                ("Dance", p.Dance), ("Talk", p.Talk), ("Push", p.Push),
+                ("Hit Chest", p.HitChest), ("Hit Head", p.HitHead),
             };
             var missing = clips.Where(c => c.clip == null).Select(c => c.state).ToArray();
-            if (controller == null || missing.Length > 0)
+            var sm = controller.layers[0].stateMachine;
+            var loco = State(sm, "Locomotion");
+            if (missing.Length > 0 || loco == null)
             {
-                Debug.LogError($"{Tag} Controller or clips missing ({string.Join(", ", missing)}), nothing changed.");
+                if (missing.Length > 0) Skip(Tag, "Actions", missing);
                 return false;
             }
             AnimationClip C(string state) => clips.First(c => c.state == state).clip;
@@ -60,14 +48,6 @@ namespace CharacterControllerSystem.EditorTools
             Param(controller, "Hit", AnimatorControllerParameterType.Trigger);
             Param(controller, "HitIndex", AnimatorControllerParameterType.Int);
 
-            var sm = controller.layers[0].stateMachine;
-            var loco = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == "Locomotion");
-            if (loco == null)
-            {
-                Debug.LogError($"{Tag} No Locomotion state.");
-                return false;
-            }
-
             // Remove what an earlier run added from Locomotion, then rebuild.
             string[] ours = { "Death A", "Death B", "SitEnter", "SitIdle", "SitExit", "Interact", "PickUp", "Jab",
                               "Cross", "Repair", "Dance", "Talk", "Push" };
@@ -78,8 +58,8 @@ namespace CharacterControllerSystem.EditorTools
 
             AnimatorState S(string name, string tag, Vector3 pos)
             {
-                var s = sm.states.Select(x => x.state).FirstOrDefault(x => x.name == name) ?? sm.AddState(name, pos);
-                foreach (var t in s.transitions.ToArray()) s.RemoveTransition(t);
+                var s = State(sm, name) ?? sm.AddState(name, pos);
+                ClearTransitions(s);
                 s.motion = C(name);
                 s.tag = tag;
                 s.writeDefaultValues = true;
@@ -144,17 +124,15 @@ namespace CharacterControllerSystem.EditorTools
             Cond(loco, push, 0.2f, (AnimatorConditionMode.If, 0f, "Pushing"));
             Cond(push, loco, 0.25f, (AnimatorConditionMode.IfNot, 0f, "Pushing"));
 
-            BuildHitLayer(controller, C("Hit Chest"), C("Hit Head"));
+            BuildHitLayer(controller, C("Hit Chest"), C("Hit Head"), UpperBodyMask(p));
             StrafeStatesBuilder.SyncExits(controller); // strafing must reach the new actions too
 
             EditorUtility.SetDirty(controller);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"{Tag} Action states added to {AssetDatabase.GetAssetPath(controller)}.");
             return true;
         }
 
         /// <summary>Upper-body override layer for hit reactions when the Animator plays on its own.</summary>
-        private static void BuildHitLayer(AnimatorController controller, AnimationClip chest, AnimationClip head)
+        private static void BuildHitLayer(AnimatorController controller, AnimationClip chest, AnimationClip head, AvatarMask mask)
         {
             var layers = controller.layers;
             int index = System.Array.FindIndex(layers, l => l.name == HitLayerName);
@@ -166,7 +144,7 @@ namespace CharacterControllerSystem.EditorTools
             }
 
             var layer = layers[index];
-            layer.avatarMask = UpperBodyMask();
+            layer.avatarMask = mask;
             layer.defaultWeight = 1f;
             layer.blendingMode = AnimatorLayerBlendingMode.Override;
             layer.iKPass = true;
@@ -192,13 +170,14 @@ namespace CharacterControllerSystem.EditorTools
         }
 
         /// <summary>Spine, chest, head and arms; legs and root keep the locomotion.</summary>
-        public static AvatarMask UpperBodyMask()
+        public static AvatarMask UpperBodyMask(CharacterSetupProfile p)
         {
-            var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(MaskPath);
+            var mask = AssetDatabase.LoadAssetAtPath<AvatarMask>(p.UpperBodyMaskPath);
             if (mask == null)
             {
+                EnsureFolderFor(p.UpperBodyMaskPath);
                 mask = new AvatarMask();
-                AssetDatabase.CreateAsset(mask, MaskPath);
+                AssetDatabase.CreateAsset(mask, p.UpperBodyMaskPath);
             }
             for (var part = AvatarMaskBodyPart.Root; part < AvatarMaskBodyPart.LastBodyPart; part++)
             {
@@ -212,55 +191,14 @@ namespace CharacterControllerSystem.EditorTools
             return mask;
         }
 
-        /// <summary>Adds CharacterActions to the Player prefab with the hit clips and upper-body mask.</summary>
-        public static void SetUpPlayer()
+        public static void SetUpPlayer(GameObject root, CharacterSetupProfile p)
         {
-            var root = PrefabUtility.LoadPrefabContents(PlayerPrefab);
-            try
-            {
-                var actions = root.GetComponent<CharacterActions>();
-                if (actions == null) actions = root.AddComponent<CharacterActions>();
-                actions.Controller = root.GetComponent<ThirdPersonController>();
-                actions.Inputs = root.GetComponent<PlayerInputs>();
-                actions.HitChestClip = Ual("Hit_Chest");
-                actions.HitHeadClip = Ual("Hit_Head");
-                actions.UpperBodyMask = UpperBodyMask();
-                PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
-                Debug.Log($"{Tag} CharacterActions set up on {PlayerPrefab}.");
-            }
-            finally
-            {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
-        }
-
-        private static void Param(AnimatorController controller, string name, AnimatorControllerParameterType type)
-        {
-            if (controller.parameters.All(p => p.name != name)) controller.AddParameter(name, type);
-        }
-
-        private static AnimationClip Ual(string name) => Clip(UalPath, name);
-
-        private static AnimationClip Clip(string path, string name) =>
-            AssetDatabase.LoadAllAssetRepresentationsAtPath(path).OfType<AnimationClip>()
-                .FirstOrDefault(c => c.name == name || c.name.EndsWith("|" + name));
-
-        private static AnimatorStateTransition Exit(AnimatorState from, AnimatorState to, float exitTime, float duration)
-        {
-            var t = from.AddTransition(to);
-            t.hasExitTime = true;
-            t.exitTime = exitTime;
-            t.duration = duration;
-            return t;
-        }
-
-        private static void Cond(AnimatorState from, AnimatorState to, float duration,
-            params (AnimatorConditionMode mode, float threshold, string param)[] conditions)
-        {
-            var t = from.AddTransition(to);
-            t.hasExitTime = false;
-            t.duration = duration;
-            foreach (var (mode, threshold, param) in conditions) t.AddCondition(mode, threshold, param);
+            var actions = Kit.Ensure<CharacterActions>(root);
+            actions.Controller = root.GetComponent<ThirdPersonController>();
+            actions.Inputs = root.GetComponent<PlayerInputs>();
+            actions.HitChestClip = p.HitChest;
+            actions.HitHeadClip = p.HitHead;
+            actions.UpperBodyMask = UpperBodyMask(p);
         }
     }
 }

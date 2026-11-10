@@ -21,7 +21,7 @@ namespace CharacterControllerSystem
     // the same input (a crouch press would otherwise brake the sprint a slide needs).
     [DefaultExecutionOrder(-10)]
     [DisallowMultipleComponent]
-    public class ParkourController : MonoBehaviour
+    public class ParkourController : MonoBehaviour, IBodyScaled, IBodyHeightScaled
     {
         public ParkourLibrary Library;
         public bool EnableParkour = true;
@@ -155,10 +155,10 @@ namespace CharacterControllerSystem
             Vector3 up = Vector3.up;
             Vector3 v = _cc.velocity;
             v.y = 0f;
-            float lookAhead = Mathf.Max(1.6f, v.magnitude * 0.75f);
+            float lookAhead = Mathf.Max(1.6f * _bs, v.magnitude * 0.75f);
 
             // Something in the way at knee height?
-            Vector3 probe = pos + up * 0.45f;
+            Vector3 probe = pos + up * (0.45f * _bs);
             if (SphereCast(probe, fwd, lookAhead, out RaycastHit wall))
             {
                 if (wall.rigidbody != null && !wall.rigidbody.isKinematic) return; // pushable: let CharacterActions push it
@@ -166,8 +166,8 @@ namespace CharacterControllerSystem
                 if (face == Vector3.zero || Vector3.Angle(face, fwd) > MaxApproachAngle) return;
                 // A real wall rises straight from the floor: a probe at ankle height meets the same face at the
                 // same distance. Stairs and ramp feet are met much closer, so they are walked, not vaulted.
-                if (!SphereCast(pos + up * (ProbeRadius + 0.05f), fwd, lookAhead, out RaycastHit low) ||
-                    Mathf.Abs(low.distance - wall.distance) > 0.25f ||
+                if (!SphereCast(pos + up * (ProbeRadius + 0.05f * _bs), fwd, lookAhead, out RaycastHit low) ||
+                    Mathf.Abs(low.distance - wall.distance) > 0.25f * _bs ||
                     Vector3.Angle(low.normal, wall.normal) > 20f) return;
                 TryObstacle(pos, face, wall);
                 return;
@@ -180,12 +180,12 @@ namespace CharacterControllerSystem
         {
             // Distance to the wall face along the approach direction.
             float faceDist = Vector3.Dot(wall.point - pos, face);
-            if (faceDist < 0.2f || faceDist > TriggerDistance) return; // not there yet: keep walking
+            if (faceDist < 0.2f * _bs || faceDist > TriggerDistance) return; // not there yet: keep walking
 
             // Top of the obstacle just past its face.
-            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * 0.15f;
-            float probeTop = pos.y + MaxClimbHeight + 0.4f;
-            if (!Raycast(new Vector3(over.x, probeTop, over.z), Vector3.down, MaxClimbHeight + 0.4f, out RaycastHit top) ||
+            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * (0.15f * _bs);
+            float probeTop = pos.y + MaxClimbHeight + 0.4f * _bs;
+            if (!Raycast(new Vector3(over.x, probeTop, over.z), Vector3.down, MaxClimbHeight + 0.4f * _bs, out RaycastHit top) ||
                 top.distance < 0.01f) return; // too tall (the ray starts inside it)
             if (Vector3.Angle(top.normal, Vector3.up) > 30f) return; // not a surface you can land on
             float height = top.point.y - pos.y;
@@ -193,11 +193,11 @@ namespace CharacterControllerSystem
 
             // Depth: how far the top continues at about the same level.
             float depth = 0f;
-            for (float d = 0.2f; d <= 2.0f; d += 0.2f)
+            for (float d = 0.2f * _bs; d <= 2.0f * _bs; d += 0.2f * _bs)
             {
                 Vector3 p = over + face * d;
-                if (!Raycast(new Vector3(p.x, top.point.y + 0.3f, p.z), Vector3.down, 0.5f, out RaycastHit h) ||
-                    Mathf.Abs(h.point.y - top.point.y) > 0.15f) break;
+                if (!Raycast(new Vector3(p.x, top.point.y + 0.3f * _bs, p.z), Vector3.down, 0.5f * _bs, out RaycastHit h) ||
+                    Mathf.Abs(h.point.y - top.point.y) > 0.15f * _bs) break;
                 depth = d;
             }
 
@@ -207,26 +207,26 @@ namespace CharacterControllerSystem
             if (height <= MaxHurdleHeight && depth <= MaxHurdleDepth)
             {
                 // Land on the far side, at about our own level.
-                Vector3 far = over + face * (depth + 0.9f);
-                if (!Raycast(new Vector3(far.x, top.point.y + 0.3f, far.z), Vector3.down, height + 1.5f, out RaycastHit land) ||
-                    Mathf.Abs(land.point.y - pos.y) > 0.5f || land.point.y > top.point.y - 0.3f) return;
+                Vector3 far = over + face * (depth + 0.9f * _bs);
+                if (!Raycast(new Vector3(far.x, top.point.y + 0.3f * _bs, far.z), Vector3.down, height + 1.5f * _bs, out RaycastHit land) ||
+                    Mathf.Abs(land.point.y - pos.y) > 0.5f * _bs || land.point.y > top.point.y - 0.3f * _bs) return;
                 kind = ParkourKind.Hurdle;
                 endY = land.point.y;
-                contact = faceDist + 0.15f + depth * 0.5f; // hurdle centre
+                contact = faceDist + 0.15f * _bs + depth * 0.5f; // hurdle centre
             }
-            else if (height >= 0.6f && depth >= 0.6f)
+            else if (height >= 0.6f * _bs && depth >= 0.6f * _bs)
             {
                 kind = height <= MaxMediumClimb ? ParkourKind.ClimbMedium : ParkourKind.ClimbHigh;
                 endY = top.point.y;
                 // Room to stand on top?
-                Vector3 stand = over + face * 0.5f;
-                Vector3 bottom = new Vector3(stand.x, top.point.y + _cc.radius + 0.05f, stand.z);
+                Vector3 stand = over + face * (0.5f * _bs);
+                Vector3 bottom = new Vector3(stand.x, top.point.y + _cc.radius + 0.05f * _bs, stand.z);
                 if (Physics.CheckCapsule(bottom, bottom + Vector3.up * (Controller.StandingHeight - 2f * _cc.radius),
                         _cc.radius * 0.9f, Controller.GroundLayers, QueryTriggerInteraction.Ignore)) return;
             }
             else return;
 
-            float hgt = kind == ParkourKind.Hurdle ? height + 0.2f : height;
+            float hgt = kind == ParkourKind.Hurdle ? height + 0.2f * _bs : height;
             _pendingLedge = new Vector3(wall.point.x, top.point.y, wall.point.z);
             Begin(kind, pos, face, contact, hgt, endY);
         }
@@ -240,21 +240,21 @@ namespace CharacterControllerSystem
             float edge = -1f;
             float groundY = 0f;
             float previousDrop = 0f;
-            for (float d = 0.2f; d <= DropTriggerDistance; d += 0.1f)
+            for (float d = 0.2f * _bs; d <= DropTriggerDistance; d += 0.1f * _bs)
             {
                 Vector3 p = pos + fwd * d;
-                bool hit = Raycast(p + Vector3.up * 0.5f, Vector3.down, MaxDrop + 0.6f, out RaycastHit h);
+                bool hit = Raycast(p + Vector3.up * (0.5f * _bs), Vector3.down, MaxDrop + 0.6f * _bs, out RaycastHit h);
                 float drop = hit ? pos.y - h.point.y : float.MaxValue;
                 if (drop > MinDrop)
                 {
                     if (!hit) return; // nothing below within reach: just fall
-                    if (previousDrop > 0.2f) return; // a slope going down, not a ledge
+                    if (previousDrop > 0.2f * _bs) return; // a slope going down, not a ledge
                     edge = d;
                     // Sample the landing a little further out so the roll has room.
-                    Vector3 l = pos + fwd * (d + 0.8f);
-                    if (!Raycast(l + Vector3.up * 0.5f, Vector3.down, MaxDrop + 0.6f, out RaycastHit land)) return;
+                    Vector3 l = pos + fwd * (d + 0.8f * _bs);
+                    if (!Raycast(l + Vector3.up * (0.5f * _bs), Vector3.down, MaxDrop + 0.6f * _bs, out RaycastHit land)) return;
                     groundY = land.point.y;
-                    if (WaterVolume.IsDeep(land.point, 1f)) return; // deep water below: just fall in and swim
+                    if (WaterVolume.IsDeep(land.point, 1f * _bs)) return; // deep water below: just fall in and swim
                     break;
                 }
                 previousDrop = drop;
@@ -283,8 +283,8 @@ namespace CharacterControllerSystem
             var move = Library.Moves[index];
 
             // Keep the speed we arrive with: stretch the recorded slide to it.
-            float clipSpeed = move.Sample(1f).x / Mathf.Max(0.1f, move.Duration);
-            _forwardScale = Mathf.Clamp(v.magnitude / Mathf.Max(0.5f, clipSpeed), 0.7f, 1.4f);
+            float clipSpeed = Sample(move, 1f).x / Mathf.Max(0.1f, move.Duration);
+            _forwardScale = Mathf.Clamp(v.magnitude / Mathf.Max(0.5f * _bs, clipSpeed), 0.7f, 1.4f);
             _heightScale = 1f;
             _move = move;
             HasLedge = false;
@@ -334,7 +334,7 @@ namespace CharacterControllerSystem
             _forward = Flat(face);
             _startRotation = transform.rotation;
             _forwardScale = 1f;
-            _heightScale = Mathf.Max(0.3f, (endY - _origin.y) / Mathf.Max(0.05f, _move.Height));
+            _heightScale = Mathf.Max(0.3f, (endY - _origin.y) / Mathf.Max(0.05f, _move.Height * _bs));
             _correctFrom = 0.4f;
             _unstretchFrom = 1f;
             if (_move.HasHold && ledgePoint.HasValue)
@@ -362,10 +362,10 @@ namespace CharacterControllerSystem
 
             // Start at the point of the recording that is as far from its obstacle as we are from ours
             // (skipping the rest of its run-up), so nothing is stretched and the move begins right here.
-            float startP = ProgressAtForward(move, move.ContactDistance - contactDistance);
-            _s0 = move.Sample(startP);
+            float startP = ProgressAtForward(move, move.ContactDistance - contactDistance / _bs);
+            _s0 = Sample(move, startP);
             _forwardScale = 1f;
-            _heightScale = height / Mathf.Max(0.05f, move.Height - _s0.y);
+            _heightScale = height / Mathf.Max(0.05f, move.Height * _bs - _s0.y);
             _correctFrom = 0.4f;
             _unstretchFrom = 1f;
             if (move.HasHold && kind != ParkourKind.Hurdle)
@@ -402,8 +402,8 @@ namespace CharacterControllerSystem
             }
 
             float p = Mathf.Clamp01(_elapsed / Mathf.Max(0.05f, _move.Duration));
-            Vector2 s = _move.Sample(p) - _s0;
-            Vector2 end = _move.Sample(1f) - _s0;
+            Vector2 s = Sample(_move, p) - _s0;
+            Vector2 end = Sample(_move, 1f) - _s0;
             float y = _origin.y + s.y * _heightScale;
             // Land exactly on the measured surface.
             float endError = _endY - (_origin.y + end.y * _heightScale);
@@ -415,7 +415,7 @@ namespace CharacterControllerSystem
             float forward;
             if (_unstretchFrom < 1f && p > _unstretchFrom)
             {
-                float held = _move.Sample(_unstretchFrom).x - _s0.x;
+                float held = Sample(_move, _unstretchFrom).x - _s0.x;
                 forward = held * _forwardScale + (s.x - held);
             }
             else forward = s.x * _forwardScale;
@@ -425,10 +425,10 @@ namespace CharacterControllerSystem
             {
                 // Slide: move with collisions, hugging the ground; stop if something blocks the way.
                 Vector3 delta = position - transform.position;
-                delta.y = -3f * dt;
+                delta.y = -3f * _bs * dt;
                 // The recording stands up at the end; under a low roof, end here and let the crouch take over.
                 // Look above and just ahead, so the hand-over happens before the chest rises into the roof.
-                if (p > 0.45f && (RoofAbove(transform.position) || RoofAbove(transform.position + _forward * 0.6f)))
+                if (p > 0.45f && (RoofAbove(transform.position) || RoofAbove(transform.position + _forward * (0.6f * _bs))))
                 {
                     Finish();
                     // Straight into the crouch: going back through the standing pose would put the chest in the roof.
@@ -458,11 +458,11 @@ namespace CharacterControllerSystem
                 Vector3 needed = Depenetrate(position) - position;
                 _correction = needed.sqrMagnitude >= _correction.sqrMagnitude
                     ? needed
-                    : Vector3.MoveTowards(_correction, needed, 1.5f * dt);
+                    : Vector3.MoveTowards(_correction, needed, 1.5f * _bs * dt);
                 Vector3 placed = Depenetrate(position + _correction);
                 // Never move further in a frame than the recording itself moved, plus a little for corrections:
                 // whatever the obstacle does to the path, the body can't teleport.
-                float limit = (position - _lastPathPosition).magnitude + 2f * dt;
+                float limit = (position - _lastPathPosition).magnitude + 2f * _bs * dt;
                 transform.position = transform.position + Vector3.ClampMagnitude(placed - transform.position, limit);
                 _lastPathPosition = position;
                 Physics.SyncTransforms();
@@ -500,7 +500,7 @@ namespace CharacterControllerSystem
         private const string CrouchState = "Crouch";
 
         private bool RoofAbove(Vector3 at) =>
-            Physics.Raycast(at + Vector3.up * 0.5f, Vector3.up, Controller.StandingHeight - 0.4f, Controller.GroundLayers,
+            Physics.Raycast(at + Vector3.up * (0.5f * _bs), Vector3.up, Controller.StandingHeight - 0.4f * _bs, Controller.GroundLayers,
                 QueryTriggerInteraction.Ignore);
 
         private void PlayState(ParkourMove move, float clipTime)
@@ -524,12 +524,12 @@ namespace CharacterControllerSystem
         /// </summary>
         private void FitHold(ParkourMove move, float ledgeHeight, float faceDistance)
         {
-            const float palm = 0.035f, inset = 0.09f;
-            float rise = move.HoldRootRise - _s0.y, ahead = move.HoldRootForward - _s0.x;
-            float handHeight = move.HoldHandHeight - _s0.y, handForward = move.HoldHandForward - _s0.x;
-            if (rise > 0.05f)
+            float palm = 0.035f * _bs, inset = 0.09f * _bs;
+            float rise = move.HoldRootRise * _bs - _s0.y, ahead = move.HoldRootForward * _bs - _s0.x;
+            float handHeight = move.HoldHandHeight * _bs - _s0.y, handForward = move.HoldHandForward * _bs - _s0.x;
+            if (rise > 0.05f * _bs)
                 _heightScale = Mathf.Clamp((ledgeHeight + palm - handHeight + rise) / rise, 0.3f, 3f);
-            if (ahead > 0.05f)
+            if (ahead > 0.05f * _bs)
                 _forwardScale = Mathf.Clamp((faceDistance + inset - handForward + ahead) / ahead, 0.2f, 3f);
             _correctFrom = Mathf.Clamp(move.HoldEnd, 0.4f, 0.95f);
             _unstretchFrom = Mathf.Clamp(move.HoldEnd, 0.2f, 1f);
@@ -569,10 +569,10 @@ namespace CharacterControllerSystem
         {
             // Below the top of the obstacle being climbed, the capsule stays in front of its face. (Pushed out of
             // the box's corner, the smallest way out flips between up and back, which reads as a teleport.)
-            if (HasLedge && p.y < LedgeTop - 0.05f)
+            if (HasLedge && p.y < LedgeTop - 0.05f * _bs)
             {
                 float into = Vector3.Dot(p - LedgePoint, LedgeFace);
-                if (into < 0.15f && into + _cc.radius > 0f) p -= LedgeFace * (into + _cc.radius);
+                if (into < 0.15f * _bs && into + _cc.radius > 0f) p -= LedgeFace * (into + _cc.radius);
             }
             Quaternion rot = transform.rotation;
             for (int iteration = 0; iteration < 3; iteration++)
@@ -597,6 +597,9 @@ namespace CharacterControllerSystem
             }
             return p;
         }
+
+        /// <summary>The library's recorded root path, scaled to this body (humanoid playback scales it the same way).</summary>
+        private Vector2 Sample(ParkourMove move, float progress) => move.Sample(progress) * _bs;
 
         private static Vector3 Flat(Vector3 v)
         {
@@ -634,6 +637,39 @@ namespace CharacterControllerSystem
                 }
             }
             return found;
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            MinSpeed *= k;
+            ProbeRadius *= k;
+            MinObstacleHeight *= k;
+            MaxHurdleHeight *= k;
+            MaxHurdleDepth *= k;
+            MaxMediumClimb *= k;
+            MaxClimbHeight *= k;
+            MinDrop *= k;
+            MaxLowDrop *= k;
+            MaxDrop *= k;
+            TriggerDistance *= k;
+            DropRunSpeed *= k;
+            DropTriggerDistance *= k;
+            MinSlideSpeed *= k;
+            _bs = s;
+        }
+
+        private float _hs = 1f;
+
+        /// <summary>The slide capsule follows the character's real height.</summary>
+        public void ApplyBodyHeight(float h)
+        {
+            SlideHeight *= h / _hs;
+            _hs = h;
         }
     }
 }

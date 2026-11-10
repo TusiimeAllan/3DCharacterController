@@ -18,6 +18,17 @@ MonoBehaviour:
   - Name: Man In Suit
     Model: {fileID: 919132149155446097, guid: 78c532bc4f4762e4daba2aade3df02ee, type: 3}
   DefaultCharacter: 0
+  EnableCrouch: 1
+  EnableStrafe: 1
+  EnableParkour: 1
+  EnableClimbing: 1
+  EnableSwimming: 1
+  EnableSlopeSlide: 1
+  EnableActions: 1
+  EnableMounts: 1
+  EnableGrounding: 1
+  EnableBodyContact: 1
+  EnableMotionMatching: 1
   Idle: {fileID: 7400002, guid: d9b2ee02710f70746b6aa2acbe11a1f7, type: 3}
   Walk: {fileID: 7400018, guid: d9b2ee02710f70746b6aa2acbe11a1f7, type: 3}
   WalkThreshold: 2
@@ -25,12 +36,85 @@ MonoBehaviour:
   RunThreshold: 4
   Sprint: {fileID: 7400076, guid: 4d74f874fbb00e149a6fce35b1334841, type: 3}
   SprintThreshold: 6
-  CrouchIdle: {fileID: -203655887218126122, guid: f681c964a7049c543ac0815170950ca6, type: 3}
-  CrouchWalk: {fileID: -203655887218126122, guid: 78ac08ca1c2a09c4ab8dc7f0864725ba, type: 3}
-  CrouchWalkThreshold: 1.5
-  Jump: {fileID: -203655887218126122, guid: 910145c243c45894faa74046474a62fd, type: 3}
+  CrouchIdle: {fileID: -7993625790543202706, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  CrouchWalk: {fileID: 4366774653929184976, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  CrouchWalkThreshold: 1.2
+  CrouchClipSpeed: 1
+  Jump: {fileID: -1862932125039169580, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  JumpLoop: {fileID: -3659967873887649963, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
   Fall: {fileID: -203655887218126122, guid: c6740153553858c4badcc1a11f108bec, type: 3}
+  Land: {fileID: 4832780573735333345, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Roll: {fileID: 3031411921458128146, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
   JumpToFallExitTime: 0.7
+  StrafeWalkForward: {fileID: -203655887218126122, guid: 6f4a7a6fd7dbe174d8805e18e72236e6, type: 3}
+  StrafeWalkLeft: {fileID: -203655887218126122, guid: d2548e23cd0b00344959ff1a5c36c687, type: 3}
+  StrafeWalkRight: {fileID: -203655887218126122, guid: c2b967000ec3ab148a5d6ced6fdeb7b2, type: 3}
+  StrafeRunForward: {fileID: -203655887218126122, guid: 6aaff108eef4f4d49ba02356f4d69b07, type: 3}
+  StrafeRunLeft: {fileID: -203655887218126122, guid: c4aecfdf33a1927419055e33a7dec85d, type: 3}
+  StrafeRunRight: {fileID: -203655887218126122, guid: adfddad0b8f0dc5478d5d29185e477ce, type: 3}
+  StrafeTurnLeft: {fileID: -203655887218126122, guid: 64ecbee3491350f4890405e35843e48c, type: 3}
+  StrafeTurnRight: {fileID: -203655887218126122, guid: 6b29ca70cd03dca46954a6dcb1ab2dfd, type: 3}
+  HangIdle: {fileID: -203655887218126122, guid: b18f1b4961ce1aa4ca38d691354b13ec, type: 3}
+  HangShimmy: {fileID: -203655887218126122, guid: d5671a1ff45df524188fb7db2103e9fb, type: 3}
+  LadderClimb: {fileID: -203655887218126122, guid: 3d357992233bb9b4197f83c04f7a2809, type: 3}
+  SwimIdle: {fileID: 1532177651469301551, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  SwimForward: {fileID: 5539243244057379418, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  SlopeSlide: {fileID: 7400000, guid: 56cea226eb8975442bb9bc30b732d8ac, type: 2}
+  SlopeSlidePoseTime: 0.42
+  DeathA: {fileID: 3532616527226485280, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  DeathB: {fileID: -203655887218126122, guid: dd1c5c1fbe1756e46b569ec2dd45bb63, type: 3}
+  SitEnter: {fileID: 7860179187555574969, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  SitIdle: {fileID: -6676812269523803463, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  SitExit: {fileID: 497093190674883199, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Interact: {fileID: -2328835098782832033, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  PickUp: {fileID: 2857599376137209812, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Jab: {fileID: -7321412271681594418, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Cross: {fileID: 1705686167135224321, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Repair: {fileID: 3659977189094709723, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Dance: {fileID: 8800687838965813479, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Talk: {fileID: 6476497563760123848, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  Push: {fileID: 2931362099718132477, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  HitChest: {fileID: -245273357908900549, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  HitHead: {fileID: -8534173349268677819, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  MountIdle: {fileID: -6676812269523803463, guid: 98df4a055f46f6747bfc437908aa75c6, type: 3}
+  ParkourClips:
+  - Clip: {fileID: 7400000, guid: 8bb183b2c8b322f4fb72c55bdf28459c, type: 2}
+    Kind: 1
+  - Clip: {fileID: 7400000, guid: ed93358691a860b449bd416df7e12940, type: 2}
+    Kind: 1
+  - Clip: {fileID: 7400000, guid: d96afd48d430f5c4aa95476abac653a1, type: 2}
+    Kind: 2
+  - Clip: {fileID: 7400000, guid: 7f01480fc6671a940bbd99c200740577, type: 2}
+    Kind: 2
+  - Clip: {fileID: 7400000, guid: 23c67ff874dd5914a89c4ab8cbb21940, type: 2}
+    Kind: 0
+  - Clip: {fileID: 7400000, guid: 7c8aee7c7a83b3841a1e8b7054b3f8a8, type: 2}
+    Kind: 0
+  - Clip: {fileID: 7400000, guid: 349336b087c253e409be206336ce19f1, type: 2}
+    Kind: 3
+  - Clip: {fileID: 7400000, guid: c2f7256b2808f5e47b22dbb091c6fa81, type: 2}
+    Kind: 3
+  - Clip: {fileID: 7400000, guid: 3d17581f1b8559944aab2c0f0f659079, type: 2}
+    Kind: 3
+  - Clip: {fileID: 7400000, guid: 97e15ecd72c48fe488fd7bfbaf0a84bd, type: 2}
+    Kind: 3
+  - Clip: {fileID: 7400000, guid: 3019e98dd24dccb42847eb06ba72b066, type: 2}
+    Kind: 4
+  - Clip: {fileID: 7400000, guid: 917765bcebdbf7b4dbc10a94a7bb76dd, type: 2}
+    Kind: 4
+  - Clip: {fileID: 7400000, guid: d96afd48d430f5c4aa95476abac653a1, type: 2}
+    Kind: 6
+  - Clip: {fileID: 7400000, guid: 7f01480fc6671a940bbd99c200740577, type: 2}
+    Kind: 6
+  - Clip: {fileID: 7400000, guid: 56cea226eb8975442bb9bc30b732d8ac, type: 2}
+    Kind: 5
+  - Clip: {fileID: 7400000, guid: 2694b2c9b32c7904aa4b7f7f220fe1d9, type: 2}
+    Kind: 5
+  MotionMatchingData: {fileID: 11400000, guid: 44aad25f13ae3f5449f303814fa1e4bb, type: 2}
+  WalkInputProfile: {fileID: 11400000, guid: e6185d4d8606f4149afac0695745b768, type: 2}
+  SprintInputProfile: {fileID: 11400000, guid: 6eb87cfd6a400ee4e9675a277332a6bd, type: 2}
+  StrafeInputProfile: {fileID: 11400000, guid: 5ac17047f0001cf48b86c260abbb2d83, type: 2}
+  MotionMatchingTemplate: {fileID: 1441259490102284309, guid: d0cf637dcf53a764f94f39824c06cc92, type: 3}
   CrouchTransition: 0.15
   JumpTransition: 0.1
   JumpToFallTransition: 0.2
@@ -51,6 +135,10 @@ MonoBehaviour:
   DefaultActionMap: Player
   ControllerPath: Assets/Art/Animations/PlayerAnimator.controller
   PrefabPath: Assets/Art/Characters/Player.prefab
+  ParkourLibraryPath: Assets/Art/Animations/Parkour/ParkourLibrary.asset
+  UpperBodyMaskPath: Assets/Art/Animations/UpperBody.mask
+  SplashMaterialPath: Assets/Art/Effects/WaterSplash.mat
+  RiggedCharactersFolder: Assets/CharacterKitTest
   SpawnPosition: {x: 0, y: 0.1, z: 0}
   CreateGroundIfMissing: 1
   GroundScale: {x: 10, y: 1, z: 10}

@@ -2,60 +2,53 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using static CharacterControllerSystem.EditorTools.AnimatorBuildUtil;
 
 namespace CharacterControllerSystem.EditorTools
 {
     /// <summary>
-    /// Adds a Strafe state to the Player Animator Controller: a 2D freeform directional blend tree on
-    /// StrafeX / StrafeZ (velocity in the character's frame) with idle, walk and run in four directions
-    /// (Mixamo Locomotion Pack; backwards is the forward cycle played in reverse).
+    /// Adds a Strafe state: a 2D freeform directional blend tree on StrafeX / StrafeZ (velocity in the
+    /// character's frame) with idle, walk and run in four directions (backwards is the forward cycle played
+    /// in reverse).
     ///   Locomotion <-> Strafe on the Strafing bool.
-    /// Strafe gets a copy of every other exit Locomotion has (jump, fall, crouch, actions, emotes, push),
-    /// so strafing never blocks them. Re-run after anything adds exits to Locomotion. Safe to re-run.
-    /// Standing turns: Strafe -> Strafe Turn L / R (Mixamo turn 90) while StrafeTurn is -1 / 1; the
-    /// controller rotates the body in step with the clip.
-    /// Motion matching hands strafing to this state (its mocap has no sideways or backwards clips).
+    /// Strafe gets a copy of every other exit Locomotion has (jump, fall, crouch, actions, emotes, push), so
+    /// strafing never blocks them. Standing turns: Strafe -> Strafe Turn L / R while StrafeTurn is -1 / 1.
+    /// Safe to re-run.
     /// </summary>
     public static class StrafeStatesBuilder
     {
         private const string Tag = "[StrafeStatesBuilder]";
-        private const string ControllerPath = "Assets/Art/Animations/PlayerAnimator.controller";
-        private const string ClipPrefix = "Assets/Art/Animations/XBot/X Bot@Strafe ";
         public const string StateName = "Strafe";
         private const float EnterDuration = 0.2f;
         private const float ExitDuration = 0.25f;
+        private static readonly (string state, int dir)[] Turns = { ("Strafe Turn L", -1), ("Strafe Turn R", 1) };
 
-        private static readonly string[] ClipNames =
-            { "Walk Forward", "Walk Left", "Walk Right", "Run Forward", "Run Left", "Run Right" };
-        private static readonly (string state, string clip, int dir)[] Turns =
-            { ("Strafe Turn L", "Turn Left 90", -1), ("Strafe Turn R", "Turn Right 90", 1) };
-
-        [MenuItem("Tools/Character Controller/Add Strafe Mode")]
-        public static void BuildDefault() =>
-            Apply(AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath));
-
-        public static bool Apply(AnimatorController controller)
+        public static bool Apply(AnimatorController controller, CharacterSetupProfile p)
         {
-            var clips = ClipNames.ToDictionary(n => n, LoadLooping);
-            var missing = clips.Where(c => c.Value == null).Select(c => c.Key).ToArray();
-            if (controller == null || missing.Length > 0)
+            var missing = Missing(("StrafeWalkForward", p.StrafeWalkForward), ("StrafeWalkLeft", p.StrafeWalkLeft),
+                ("StrafeWalkRight", p.StrafeWalkRight), ("StrafeRunForward", p.StrafeRunForward),
+                ("StrafeRunLeft", p.StrafeRunLeft), ("StrafeRunRight", p.StrafeRunRight));
+            var sm = controller.layers[0].stateMachine;
+            var loco = State(sm, "Locomotion");
+            if (missing.Length > 0 || loco == null)
             {
-                Debug.LogError($"{Tag} Controller or clips missing ({string.Join(", ", missing)}), nothing changed.");
+                if (missing.Length > 0) Skip(Tag, "Strafe", missing);
                 return false;
             }
+
+            // Cycles must loop.
+            AnimationClip Loop(AnimationClip c)
+            {
+                EnsureImport(c, loop: true, bodyDriven: false);
+                return Reload(c);
+            }
+            var walk = (fwd: Loop(p.StrafeWalkForward), left: Loop(p.StrafeWalkLeft), right: Loop(p.StrafeWalkRight));
+            var run = (fwd: Loop(p.StrafeRunForward), left: Loop(p.StrafeRunLeft), right: Loop(p.StrafeRunRight));
 
             Param(controller, "Strafing", AnimatorControllerParameterType.Bool);
             Param(controller, "StrafeX", AnimatorControllerParameterType.Float);
             Param(controller, "StrafeZ", AnimatorControllerParameterType.Float);
             Param(controller, "StrafeTurn", AnimatorControllerParameterType.Int);
-
-            var sm = controller.layers[0].stateMachine;
-            var loco = State(sm, "Locomotion");
-            if (loco == null)
-            {
-                Debug.LogError($"{Tag} No Locomotion state.");
-                return false;
-            }
 
             // Same idle as Locomotion, so stepping in and out of strafe while standing does not pop.
             var idle = (loco.motion as BlendTree)?.children.OrderBy(c => c.threshold).Select(c => c.motion)
@@ -77,14 +70,13 @@ namespace CharacterControllerSystem.EditorTools
 
             // Positions are each clip's real velocity, so the blend matches the speed the controller moves at.
             if (idle != null) tree.AddChild(idle, Vector2.zero);
-            foreach (var gait in new[] { "Walk", "Run" })
+            foreach (var (fwd, left, right) in new[] { walk, run })
             {
-                var fwd = clips[gait + " Forward"];
                 float fwdSpeed = Mathf.Abs(fwd.averageSpeed.z);
                 tree.AddChild(fwd, new Vector2(0f, fwdSpeed));
                 tree.AddChild(fwd, new Vector2(0f, -fwdSpeed)); // reversed below: backwards
-                tree.AddChild(clips[gait + " Left"], new Vector2(-Mathf.Abs(clips[gait + " Left"].averageSpeed.x), 0f));
-                tree.AddChild(clips[gait + " Right"], new Vector2(Mathf.Abs(clips[gait + " Right"].averageSpeed.x), 0f));
+                tree.AddChild(left, new Vector2(-Mathf.Abs(left.averageSpeed.x), 0f));
+                tree.AddChild(right, new Vector2(Mathf.Abs(right.averageSpeed.x), 0f));
             }
             var children = tree.children;
             for (int i = 0; i < children.Length; i++)
@@ -94,23 +86,21 @@ namespace CharacterControllerSystem.EditorTools
             strafe.motion = tree;
             strafe.writeDefaultValues = true;
 
+            var turnClips = new[] { p.StrafeTurnLeft, p.StrafeTurnRight };
             for (int i = 0; i < Turns.Length; i++)
             {
-                var clip = Load(Turns[i].clip);
-                if (clip == null)
+                if (turnClips[i] == null)
                 {
-                    Debug.LogWarning($"{Tag} Turn clip {Turns[i].clip} missing, standing turns will slide.");
+                    Debug.LogWarning($"{Tag} No strafe turn clip for {Turns[i].state}, standing turns will slide.");
                     continue;
                 }
                 var turn = State(sm, Turns[i].state) ?? sm.AddState(Turns[i].state, new Vector3(500f, -180f + i * 120f));
-                turn.motion = clip;
+                turn.motion = turnClips[i];
                 turn.writeDefaultValues = true;
             }
             SyncExits(controller);
 
             EditorUtility.SetDirty(controller);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"{Tag} Strafe state added to {AssetDatabase.GetAssetPath(controller)}.");
             return true;
         }
 
@@ -126,7 +116,7 @@ namespace CharacterControllerSystem.EditorTools
             if (loco == null || strafe == null) return;
 
             foreach (var t in loco.transitions.Where(t => t.destinationState == strafe).ToArray()) loco.RemoveTransition(t);
-            foreach (var t in strafe.transitions.ToArray()) strafe.RemoveTransition(t);
+            ClearTransitions(strafe);
 
             foreach (var src in loco.transitions)
             {
@@ -142,11 +132,11 @@ namespace CharacterControllerSystem.EditorTools
             }
 
             // Standing turns, after the copied exits so a jump or action still wins.
-            foreach (var (stateName, _, dir) in Turns)
+            foreach (var (stateName, dir) in Turns)
             {
                 var turn = State(sm, stateName);
                 if (turn == null) continue;
-                foreach (var t in turn.transitions.ToArray()) turn.RemoveTransition(t);
+                ClearTransitions(turn);
                 var into = strafe.AddTransition(turn);
                 into.hasExitTime = false;
                 into.duration = 0.1f;
@@ -169,39 +159,6 @@ namespace CharacterControllerSystem.EditorTools
             enter.duration = EnterDuration;
             enter.AddCondition(AnimatorConditionMode.If, 0f, "Strafing");
             EditorUtility.SetDirty(controller);
-        }
-
-        private static AnimationClip Load(string name) =>
-            AssetDatabase.LoadAllAssetRepresentationsAtPath(ClipPrefix + name + ".fbx").OfType<AnimationClip>()
-                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
-
-        /// <summary>Loads a strafe clip and makes sure it is imported looping.</summary>
-        private static AnimationClip LoadLooping(string name)
-        {
-            string path = ClipPrefix + name + ".fbx";
-            var importer = AssetImporter.GetAtPath(path) as ModelImporter;
-            if (importer == null) return null;
-            var defs = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
-            if (defs.Any(d => !d.loopTime))
-            {
-                foreach (var d in defs)
-                {
-                    d.loopTime = true;
-                    d.name = "Strafe " + name;
-                }
-                importer.clipAnimations = defs;
-                importer.SaveAndReimport();
-            }
-            return AssetDatabase.LoadAllAssetRepresentationsAtPath(path).OfType<AnimationClip>()
-                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
-        }
-
-        private static AnimatorState State(AnimatorStateMachine sm, string name) =>
-            sm.states.Select(s => s.state).FirstOrDefault(s => s.name == name);
-
-        private static void Param(AnimatorController controller, string name, AnimatorControllerParameterType type)
-        {
-            if (controller.parameters.All(p => p.name != name)) controller.AddParameter(name, type);
         }
     }
 }

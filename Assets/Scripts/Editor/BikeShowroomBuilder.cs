@@ -17,7 +17,7 @@ namespace CharacterControllerSystem.EditorTools
         private const string Tag = "[BikeShowroomBuilder]";
         private const string ScenePath = "Assets/Scenes/Showroom.unity";
         private const string ControllerPath = "Assets/Art/Animations/PlayerAnimator.controller";
-        private const string UalPath = "Assets/Art/Animations/UAL/UAL1_Standard.fbx";
+        private const string UalPath = CharacterControllerSystem.EditorTools.KitPaths.Ual;
         private const string PrefabFolder = "Assets/Packs/Transport/Prefabs";
         private const string DisplayName = "VehicleDisplay";
 
@@ -76,9 +76,16 @@ namespace CharacterControllerSystem.EditorTools
         }
 
         /// <summary>Any State -> Ride while Riding, back to Locomotion when it clears.</summary>
-        private static bool AddRideState()
+        private static bool AddRideState() => AddRideState(AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath));
+
+        /// <summary>Kit rebuilds of the Animator Controller keep the Ride state.</summary>
+        [InitializeOnLoadMethod]
+        private static void RegisterWithKit() =>
+            CharacterControllerSystem.EditorTools.CharacterKitModules.Register(
+                (CharacterControllerSystem.EditorTools.CharacterKitModules.AnimatorModule)((c, p) => AddRideState(c)));
+
+        private static bool AddRideState(AnimatorController controller)
         {
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
             var clip = AssetDatabase.LoadAllAssetRepresentationsAtPath(UalPath).OfType<AnimationClip>()
                 .FirstOrDefault(c => c.name == "Sitting_Idle_Loop");
             if (controller == null || clip == null)

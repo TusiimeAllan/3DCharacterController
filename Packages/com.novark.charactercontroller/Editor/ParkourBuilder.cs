@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -9,8 +8,8 @@ namespace CharacterControllerSystem.EditorTools
 {
     /// <summary>
     /// Sets up context parkour (ParkourController):
-    /// 1. analyses the MxM demo vault clips: finds the window where the move happens (leaving and rejoining
-    ///    the ground) and samples the root path, into Assets/Art/Animations/Parkour/ParkourLibrary.asset;
+    /// 1. analyses the profile's parkour clips: finds the window where the move happens (leaving and rejoining
+    ///    the ground) and samples the root path, into the profile's parkour library;
     /// 2. adds one base-layer state per move to the Player Animator Controller (entered from Any State on
     ///    the "Parkour" int, starting at the window, leaving for Locomotion at its end), tagged "Parkour";
     /// 3. adds ParkourController to the Player prefab.
@@ -19,56 +18,48 @@ namespace CharacterControllerSystem.EditorTools
     public static class ParkourBuilder
     {
         private const string Tag = "[ParkourBuilder]";
-        private const string LibraryPath = "Assets/Art/Animations/Parkour/ParkourLibrary.asset";
-        private const string ControllerPath = "Assets/Art/Animations/PlayerAnimator.controller";
-        private const string PlayerPrefab = "Assets/Art/Characters/Player.prefab";
-        private const string Events = "Assets/Plugins/MotionMatching/Demo/Animations/Events/";
         private const string StatePrefix = "PK ";
         private const float SampleRate = 60f;
         private const int PathSamples = 64;
 
-        private static readonly (string path, ParkourKind kind)[] Sources =
+        /// <summary>The bundled vault, climb, drop and slide clips (MxM demo mocap).</summary>
+        public static List<CharacterSetupProfile.ParkourSource> DefaultSources()
         {
-            (Events + "VaultUp/Run_JumpUpMedium_2Hands_Run.anim", ParkourKind.ClimbMedium),
-            (Events + "VaultUp/Run_JumpUpMedium_2Hands_Run_Mirror.anim", ParkourKind.ClimbMedium),
-            (Events + "VaultUp/Run_JumpUpHigh_Run.anim", ParkourKind.ClimbHigh),
-            (Events + "VaultUp/Run_JumpUpHigh_Run_Mirror.anim", ParkourKind.ClimbHigh),
-            (Events + "VaultUp/RunJump_ToLeft_2.anim", ParkourKind.Hurdle),
-            (Events + "VaultUp/RunJump_ToRight_2.anim", ParkourKind.Hurdle),
-            (Events + "VaultOff/_209_Run_JumpDownLow_Run.anim", ParkourKind.DropLow),
-            (Events + "VaultOff/_209_Run_JumpDownLow_Run_Mirror.anim", ParkourKind.DropLow),
-            (Events + "VaultOff/Run_JumpDownLow_Roll_Run.anim", ParkourKind.DropLow),
-            (Events + "VaultOff/Run_JumpDownLow_Roll_Run_Mirror.anim", ParkourKind.DropLow),
-            (Events + "VaultOff/Run_JumpDownHigh_Roll_Run.anim", ParkourKind.DropHigh),
-            (Events + "VaultOff/Run_JumpDownHigh_Roll_Run_Mirror.anim", ParkourKind.DropHigh),
-            (Events + "VaultUp/Run_JumpUpHigh_Run.anim", ParkourKind.ClimbFromHang),
-            (Events + "VaultUp/Run_JumpUpHigh_Run_Mirror.anim", ParkourKind.ClimbFromHang),
-            (Events + "RunSlide_ToRight_1.anim", ParkourKind.Slide),
-            (Events + "RunSlide_ToRight_2.anim", ParkourKind.Slide),
-        };
-
-        [MenuItem("Tools/Character Controller/Add Parkour (Vault, Climb, Drop)")]
-        public static void BuildAll()
-        {
-            var library = BuildLibrary();
-            if (library == null) return;
-            ApplyAnimator(AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath), library);
-            SetUpPlayer(library);
+            var list = new List<CharacterSetupProfile.ParkourSource>();
+            void Add(string path, ParkourKind kind)
+            {
+                var clip = KitPaths.EventClip(path);
+                if (clip != null) list.Add(new CharacterSetupProfile.ParkourSource { Clip = clip, Kind = kind });
+            }
+            Add("VaultUp/Run_JumpUpMedium_2Hands_Run.anim", ParkourKind.ClimbMedium);
+            Add("VaultUp/Run_JumpUpMedium_2Hands_Run_Mirror.anim", ParkourKind.ClimbMedium);
+            Add("VaultUp/Run_JumpUpHigh_Run.anim", ParkourKind.ClimbHigh);
+            Add("VaultUp/Run_JumpUpHigh_Run_Mirror.anim", ParkourKind.ClimbHigh);
+            Add("VaultUp/RunJump_ToLeft_2.anim", ParkourKind.Hurdle);
+            Add("VaultUp/RunJump_ToRight_2.anim", ParkourKind.Hurdle);
+            Add("VaultOff/_209_Run_JumpDownLow_Run.anim", ParkourKind.DropLow);
+            Add("VaultOff/_209_Run_JumpDownLow_Run_Mirror.anim", ParkourKind.DropLow);
+            Add("VaultOff/Run_JumpDownLow_Roll_Run.anim", ParkourKind.DropLow);
+            Add("VaultOff/Run_JumpDownLow_Roll_Run_Mirror.anim", ParkourKind.DropLow);
+            Add("VaultOff/Run_JumpDownHigh_Roll_Run.anim", ParkourKind.DropHigh);
+            Add("VaultOff/Run_JumpDownHigh_Roll_Run_Mirror.anim", ParkourKind.DropHigh);
+            Add("VaultUp/Run_JumpUpHigh_Run.anim", ParkourKind.ClimbFromHang);
+            Add("VaultUp/Run_JumpUpHigh_Run_Mirror.anim", ParkourKind.ClimbFromHang);
+            Add("RunSlide_ToRight_1.anim", ParkourKind.Slide);
+            Add("RunSlide_ToRight_2.anim", ParkourKind.Slide);
+            return list;
         }
 
         // ---------------------------------------------------------------- library
 
-        public static ParkourLibrary BuildLibrary()
+        public static ParkourLibrary BuildLibrary(CharacterSetupProfile p)
         {
             var moves = new List<ParkourMove>();
-            foreach (var (path, kind) in Sources)
+            foreach (var source in p.ParkourClips)
             {
-                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
-                if (clip == null)
-                {
-                    Debug.LogWarning($"{Tag} Missing clip {path}, skipped.");
-                    continue;
-                }
+                if (source == null || source.Clip == null) continue;
+                var clip = source.Clip;
+                var kind = source.Kind;
                 var move = Analyse(clip, kind);
                 if (move == null)
                 {
@@ -80,7 +71,7 @@ namespace CharacterControllerSystem.EditorTools
             }
             if (moves.Count == 0)
             {
-                Debug.LogError($"{Tag} No parkour clips could be analysed.");
+                Debug.LogWarning($"{Tag} Parkour skipped, no parkour clips in the profile could be analysed.");
                 return null;
             }
 
@@ -103,12 +94,12 @@ namespace CharacterControllerSystem.EditorTools
                 m.RightHandContact = Map(full.RightHandContact);
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(LibraryPath));
-            var library = AssetDatabase.LoadAssetAtPath<ParkourLibrary>(LibraryPath);
+            AnimatorBuildUtil.EnsureFolderFor(p.ParkourLibraryPath);
+            var library = AssetDatabase.LoadAssetAtPath<ParkourLibrary>(p.ParkourLibraryPath);
             if (library == null)
             {
                 library = ScriptableObject.CreateInstance<ParkourLibrary>();
-                AssetDatabase.CreateAsset(library, LibraryPath);
+                AssetDatabase.CreateAsset(library, p.ParkourLibraryPath);
             }
             library.Moves = moves;
             EditorUtility.SetDirty(library);
@@ -257,7 +248,7 @@ namespace CharacterControllerSystem.EditorTools
         private static void FindHandContacts(ParkourMove move)
         {
             if (move.Kind == ParkourKind.DropLow || move.Kind == ParkourKind.DropHigh || move.Kind == ParkourKind.Slide) return;
-            const string modelPath = "Assets/Art/Characters/XBot/X Bot.fbx";
+            const string modelPath = KitPaths.XBot; // the move is measured on the reference body
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
             var avatar = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<Avatar>().FirstOrDefault();
             if (model == null || avatar == null) return;
@@ -376,14 +367,9 @@ namespace CharacterControllerSystem.EditorTools
 
         // ---------------------------------------------------------------- animator
 
-        public static void ApplyAnimator(AnimatorController controller, ParkourLibrary library = null)
+        public static bool ApplyAnimator(AnimatorController controller, ParkourLibrary library)
         {
-            library = library != null ? library : AssetDatabase.LoadAssetAtPath<ParkourLibrary>(LibraryPath);
-            if (controller == null || library == null)
-            {
-                Debug.LogWarning($"{Tag} Controller or parkour library missing, parkour states not added.");
-                return;
-            }
+            if (controller == null || library == null) return false;
             if (controller.parameters.All(p => p.name != "Parkour"))
                 controller.AddParameter("Parkour", AnimatorControllerParameterType.Int);
 
@@ -392,7 +378,7 @@ namespace CharacterControllerSystem.EditorTools
             if (loco == null)
             {
                 Debug.LogError($"{Tag} No Locomotion state.");
-                return;
+                return false;
             }
 
             // Remove what an earlier run added.
@@ -425,31 +411,16 @@ namespace CharacterControllerSystem.EditorTools
                 exit.duration = 0.2f;
             }
             EditorUtility.SetDirty(controller);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"{Tag} {library.Moves.Count} parkour states added to {AssetDatabase.GetAssetPath(controller)}.");
+            return true;
         }
 
         // ---------------------------------------------------------------- player
 
-        public static void SetUpPlayer(ParkourLibrary library)
+        public static void SetUpPlayer(GameObject root, ParkourLibrary library)
         {
-            var root = PrefabUtility.LoadPrefabContents(PlayerPrefab);
-            try
-            {
-                var pk = root.GetComponent<ParkourController>() ?? root.AddComponent<ParkourController>();
-                pk.Library = library;
-                pk.Controller = root.GetComponent<ThirdPersonController>();
-                var solver = root.GetComponent<BodyContactSolver>();
-                if (solver == null) solver = root.AddComponent<BodyContactSolver>();
-                solver.Controller = pk.Controller;
-                solver.Parkour = pk;
-                PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
-                Debug.Log($"{Tag} ParkourController on {PlayerPrefab}.");
-            }
-            finally
-            {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
+            var pk = Kit.Ensure<ParkourController>(root);
+            pk.Library = library;
+            pk.Controller = root.GetComponent<ThirdPersonController>();
         }
     }
 }

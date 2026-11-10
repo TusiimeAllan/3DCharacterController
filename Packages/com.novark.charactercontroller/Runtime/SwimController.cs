@@ -16,7 +16,7 @@ namespace CharacterControllerSystem
     /// </summary>
     [DefaultExecutionOrder(-6)] // with ParkourController / ClimbController, before ThirdPersonController
     [DisallowMultipleComponent]
-    public class SwimController : MonoBehaviour
+    public class SwimController : MonoBehaviour, IBodyScaled
     {
         public bool EnableSwimming = true;
 
@@ -209,7 +209,7 @@ namespace CharacterControllerSystem
                 IsUnderwater = true;
                 _verticalSpeed = 0f;
                 Effects?.Stroke(new Vector3(pos.x, _water.SurfaceY, pos.z), 0.6f);
-                Effects?.Bubbles(pos + Vector3.up * 0.4f, 14, _water.SurfaceY);
+                Effects?.Bubbles(pos + Vector3.up * (0.4f * _bs), 14, _water.SurfaceY);
             }
 
             if (IsUnderwater)
@@ -228,7 +228,7 @@ namespace CharacterControllerSystem
                     if (_verticalSpeed < 0f) _verticalSpeed = 0f;
                 }
                 var headBone = _animator != null ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
-                bool headOut = headBone != null && headBone.position.y > _water.SurfaceY + 0.05f;
+                bool headOut = headBone != null && headBone.position.y > _water.SurfaceY + 0.05f * _bs;
                 if ((pos.y + dy >= floatY || headOut) && _verticalSpeed > 0f)
                 {
                     if (_gasping) _diveLocked = true; // catch a breath: let go of Crouch before diving again
@@ -276,18 +276,18 @@ namespace CharacterControllerSystem
         {
             float depth = water != null ? water.SurfaceY - transform.position.y : 0f;
             IsWading = water != null && depth > WadeStartDepth && Controller.Grounded;
-            if (IsWading && _wet != null) _wet.SoakTo(Mathf.Clamp01(depth / 1.6f) * 0.9f);
+            if (IsWading && _wet != null) _wet.SoakTo(Mathf.Clamp01(depth / (1.6f * _bs)) * 0.9f);
             Controller.WadeSpeedFactor = IsWading
                 ? Mathf.Lerp(1f, WadeMinSpeed, Mathf.InverseLerp(WadeStartDepth, EnterDepth, depth))
                 : 1f;
             if (!IsWading) return;
             Vector3 v = _cc.velocity;
             v.y = 0f;
-            if (v.magnitude < 0.6f) return;
+            if (v.magnitude < 0.6f * _bs) return;
             _effectTimer -= dt;
             if (_effectTimer > 0f) return;
-            _effectTimer = WadeStepInterval * Mathf.Clamp(1.5f / v.magnitude, 0.6f, 1.4f);
-            Vector3 p = transform.position + v.normalized * 0.3f;
+            _effectTimer = WadeStepInterval * Mathf.Clamp(1.5f * _bs / v.magnitude, 0.6f, 1.4f);
+            Vector3 p = transform.position + v.normalized * (0.3f * _bs);
             Effects?.Stroke(new Vector3(p.x, water.SurfaceY, p.z), 0.2f + 0.3f * Mathf.InverseLerp(WadeStartDepth, EnterDepth, depth));
         }
 
@@ -326,7 +326,7 @@ namespace CharacterControllerSystem
             {
                 float wanted = 0f;
                 var head = _animator != null ? _animator.GetBoneTransform(HumanBodyBones.Head) : null;
-                if (IsSwimming && IsUnderwater && head != null) wanted = head.position.y + 0.15f - _camera.Target.position.y;
+                if (IsSwimming && IsUnderwater && head != null) wanted = head.position.y + 0.15f * _bs - _camera.Target.position.y;
                 _camera.PivotOffset = Mathf.Lerp(_camera.PivotOffset, Mathf.Min(0f, wanted), 1f - Mathf.Exp(-4f * dt));
             }
         }
@@ -343,7 +343,7 @@ namespace CharacterControllerSystem
                 if (head != null) Effects.Bubbles(head.position + transform.forward * 0.12f, Random.Range(5, 10), _water.SurfaceY);
             }
             float speed = _velocity.magnitude + Mathf.Abs(_verticalSpeed);
-            if (speed < 0.4f) return;
+            if (speed < 0.4f * _bs) return;
             _effectTimer -= dt;
             if (_effectTimer > 0f) return;
             _effectTimer = StrokeInterval * Mathf.Clamp(SwimSpeed / speed, 0.6f, 1.4f);
@@ -357,12 +357,12 @@ namespace CharacterControllerSystem
         private void StrokeEffects(Vector3 pos, float dt)
         {
             float speed = _velocity.magnitude;
-            if (speed < 0.5f) return;
+            if (speed < 0.5f * _bs) return;
             _effectTimer -= dt;
             if (_effectTimer > 0f) return;
             _effectTimer = StrokeInterval * Mathf.Clamp(SwimSpeed / speed, 0.6f, 1.4f);
-            Vector3 p = pos + transform.forward * 0.6f;
-            Effects?.Stroke(new Vector3(p.x, _water.SurfaceY, p.z), Mathf.InverseLerp(0.5f, SwimSprintSpeed, speed));
+            Vector3 p = pos + transform.forward * (0.6f * _bs);
+            Effects?.Stroke(new Vector3(p.x, _water.SurfaceY, p.z), Mathf.InverseLerp(0.5f * _bs, SwimSprintSpeed, speed));
         }
 
         // Keep the head above water whatever the swim pose (measured after the animation is evaluated).
@@ -373,7 +373,7 @@ namespace CharacterControllerSystem
             if (head == null) return;
             float error = _water.SurfaceY + HeadAboveWater - head.position.y; // > 0: head too low
             // The swim poses lie flat, so the "feet" reference can end up close to the surface.
-            _floatDepth = Mathf.Clamp(_floatDepth - error * (1f - Mathf.Exp(-3f * Time.deltaTime)), -0.6f, 2.2f);
+            _floatDepth = Mathf.Clamp(_floatDepth - error * (1f - Mathf.Exp(-3f * Time.deltaTime)), -0.6f * _bs, 2.2f * _bs);
         }
 
         // Pitch the body with the swim direction underwater.
@@ -383,7 +383,7 @@ namespace CharacterControllerSystem
             float target = 0f;
             if (IsSwimming && IsUnderwater)
             {
-                float horizontal = Mathf.Max(_velocity.magnitude, 0.6f);
+                float horizontal = Mathf.Max(_velocity.magnitude, 0.6f * _bs);
                 target = Mathf.Clamp(Mathf.Atan2(-_verticalSpeed, horizontal) * Mathf.Rad2Deg, -MaxPitch, MaxPitch);
             }
             _pitch = Mathf.Lerp(_pitch, target, 1f - Mathf.Exp(-5f * Time.deltaTime));
@@ -434,17 +434,17 @@ namespace CharacterControllerSystem
             Vector3 fwd = transform.forward;
             fwd.y = 0f;
             fwd.Normalize();
-            Vector3 origin = new Vector3(transform.position.x, _water.SurfaceY - 0.2f, transform.position.z);
-            if (!Cast(origin, fwd, 0.9f, out RaycastHit wall, 0.2f)) return false;
+            Vector3 origin = new Vector3(transform.position.x, _water.SurfaceY - 0.2f * _bs, transform.position.z);
+            if (!Cast(origin, fwd, 0.9f * _bs, out RaycastHit wall, 0.2f * _bs)) return false;
             Vector3 face = -wall.normal;
             face.y = 0f;
             if (face.sqrMagnitude < 1e-4f || Vector3.Angle(face, fwd) > 50f) return false;
             face.Normalize();
-            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * 0.2f;
-            float startY = _water.SurfaceY + MaxClimbOutHeight + 0.3f;
-            if (!Ray(new Vector3(over.x, startY, over.z), Vector3.down, MaxClimbOutHeight + 0.6f, out RaycastHit top) ||
+            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * (0.2f * _bs);
+            float startY = _water.SurfaceY + MaxClimbOutHeight + 0.3f * _bs;
+            if (!Ray(new Vector3(over.x, startY, over.z), Vector3.down, MaxClimbOutHeight + 0.6f * _bs, out RaycastHit top) ||
                 top.distance < 0.01f) return false;
-            if (top.point.y < _water.SurfaceY - 0.2f) return false;
+            if (top.point.y < _water.SurfaceY - 0.2f * _bs) return false;
 
             RestoreStep();
             IsSwimming = false;
@@ -465,7 +465,7 @@ namespace CharacterControllerSystem
         private bool GroundBelow(Vector3 pos, out float groundY)
         {
             groundY = float.MinValue;
-            if (!Ray(pos + Vector3.up * 0.5f, Vector3.down, 6f, out RaycastHit hit)) return false;
+            if (!Ray(pos + Vector3.up * (0.5f * _bs), Vector3.down, 6f * _bs, out RaycastHit hit)) return false;
             groundY = hit.point.y;
             return true;
         }
@@ -516,6 +516,30 @@ namespace CharacterControllerSystem
                 layer.SetFloat(id, value);
             else if (_animator != null && _animator.runtimeAnimatorController != null)
                 _animator.SetFloat(id, value);
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            SwimSpeed *= k;
+            SwimSprintSpeed *= k;
+            Acceleration *= k;
+            EnterDepth *= k;
+            ExitDepth *= k;
+            HeadAboveWater *= k;
+            FloatDepth *= k;
+            BobAmplitude *= k;
+            DiveSpeed *= k;
+            Buoyancy *= k;
+            EdgeMargin *= k;
+            MinFloorClearance *= k;
+            WadeStartDepth *= k;
+            MaxClimbOutHeight *= k;
+            _bs = s;
         }
     }
 }

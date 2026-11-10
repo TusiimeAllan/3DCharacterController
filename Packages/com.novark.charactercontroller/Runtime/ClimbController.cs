@@ -15,7 +15,7 @@ namespace CharacterControllerSystem
     /// </summary>
     [DefaultExecutionOrder(-5)] // after ParkourController, before ThirdPersonController clears the jump input
     [DisallowMultipleComponent]
-    public class ClimbController : MonoBehaviour
+    public class ClimbController : MonoBehaviour, IBodyScaled
     {
         public bool EnableLedges = true;
         public bool EnableLadders = true;
@@ -122,7 +122,7 @@ namespace CharacterControllerSystem
             if (Current == State.Hanging)
             {
                 // Up/down and along the ledge only: the body keeps its distance from the wall.
-                error = new Vector3(_edge.x, _ledgeTop + 0.03f, _edge.z) - hands;
+                error = new Vector3(_edge.x, _ledgeTop + 0.03f * _bs, _edge.z) - hands;
                 error -= _face * Vector3.Dot(error, _face);
             }
             else
@@ -133,12 +133,12 @@ namespace CharacterControllerSystem
                 var rf = _animator.GetBoneTransform(HumanBodyBones.RightFoot);
                 Vector3 feet = lf != null && rf != null ? (lf.position + rf.position) * 0.5f : hands;
                 Vector3 right = Vector3.Cross(Vector3.up, _ladder.Out);
-                Vector3 rungs = _ladder.Bottom + _ladder.Out * 0.1f; // the ball of the foot on the rung
+                Vector3 rungs = _ladder.Bottom + _ladder.Out * (0.1f * _bs); // the ball of the foot on the rung
                 error = _ladder.Out * Vector3.Dot(rungs - feet, _ladder.Out) +
                         right * Vector3.Dot(_ladder.Bottom - hands, right);
             }
             _align += error * (1f - Mathf.Exp(-AlignRate * Time.deltaTime));
-            _align = Vector3.ClampMagnitude(_align, 1.5f);
+            _align = Vector3.ClampMagnitude(_align, 1.5f * _bs);
         }
 
         // ---------------------------------------------------------------- ledges
@@ -147,14 +147,14 @@ namespace CharacterControllerSystem
         {
             Vector3 pos = transform.position;
             Vector3 fwd = Flat(transform.forward);
-            if (!SphereCast(pos + Vector3.up * 1.3f, 0.15f, fwd, 0.7f, out RaycastHit wall)) return;
+            if (!SphereCast(pos + Vector3.up * (1.3f * _bs), 0.15f * _bs, fwd, 0.7f * _bs, out RaycastHit wall)) return;
             if (wall.rigidbody != null && !wall.rigidbody.isKinematic) return;
             Vector3 face = Flat(-wall.normal);
             if (face == Vector3.zero || Vector3.Angle(face, fwd) > 50f) return;
 
-            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * 0.15f;
-            float startY = pos.y + MaxGrabHeight + 0.3f;
-            if (!Raycast(new Vector3(over.x, startY, over.z), Vector3.down, MaxGrabHeight - MinGrabHeight + 0.3f,
+            Vector3 over = new Vector3(wall.point.x, 0f, wall.point.z) + face * (0.15f * _bs);
+            float startY = pos.y + MaxGrabHeight + 0.3f * _bs;
+            if (!Raycast(new Vector3(over.x, startY, over.z), Vector3.down, MaxGrabHeight - MinGrabHeight + 0.3f * _bs,
                     out RaycastHit top) || top.distance < 0.01f) return; // no ledge in reach (or the wall continues)
             if (Vector3.Angle(top.normal, Vector3.up) > 30f) return;
             float height = top.point.y - pos.y;
@@ -188,7 +188,7 @@ namespace CharacterControllerSystem
             if (move.y < -0.5f || _inputs.crouch)
             {
                 _inputs.crouch = false;
-                Detach(-_face * 0.15f);
+                Detach(-_face * (0.15f * _bs));
                 return;
             }
 
@@ -198,7 +198,7 @@ namespace CharacterControllerSystem
                 Vector3 right = Vector3.Cross(Vector3.up, _face);
                 Vector3 dir = right * Mathf.Sign(side);
                 Vector3 next = _edge + dir * (ShimmySpeed * Mathf.Abs(side) * dt);
-                if (LedgeContinues(next + dir * 0.35f) && !BlockedSideways(dir)) _edge = next;
+                if (LedgeContinues(next + dir * (0.35f * _bs)) && !BlockedSideways(dir)) _edge = next;
                 else side = 0f;
             }
             SetFloat(HangMoveId, side);
@@ -218,25 +218,25 @@ namespace CharacterControllerSystem
 
         private bool LedgeContinues(Vector3 edgePoint)
         {
-            Vector3 over = edgePoint + _face * 0.15f;
-            if (!Raycast(new Vector3(over.x, _ledgeTop + 0.3f, over.z), Vector3.down, 0.5f, out RaycastHit top) ||
-                Mathf.Abs(top.point.y - _ledgeTop) > 0.15f) return false;
+            Vector3 over = edgePoint + _face * (0.15f * _bs);
+            if (!Raycast(new Vector3(over.x, _ledgeTop + 0.3f * _bs, over.z), Vector3.down, 0.5f * _bs, out RaycastHit top) ||
+                Mathf.Abs(top.point.y - _ledgeTop) > 0.15f * _bs) return false;
             // ... and there is still a wall to hang against.
-            Vector3 under = edgePoint - _face * 0.4f;
-            return Raycast(new Vector3(under.x, _ledgeTop - 0.3f, under.z), _face, 0.7f, out _);
+            Vector3 under = edgePoint - _face * (0.4f * _bs);
+            return Raycast(new Vector3(under.x, _ledgeTop - 0.3f * _bs, under.z), _face, 0.7f * _bs, out _);
         }
 
         private bool BlockedSideways(Vector3 dir)
         {
-            Vector3 body = transform.position + Vector3.up * (HangHandHeight - 0.6f);
-            return SphereCast(body, 0.2f, dir, 0.45f, out _);
+            Vector3 body = transform.position + Vector3.up * (HangHandHeight - 0.6f * _bs);
+            return SphereCast(body, 0.2f * _bs, dir, 0.45f * _bs, out _);
         }
 
         private void ClimbUp()
         {
             // Room to stand on top?
-            Vector3 stand = _edge + _face * 0.5f;
-            Vector3 bottom = new Vector3(stand.x, _ledgeTop + _cc.radius + 0.05f, stand.z);
+            Vector3 stand = _edge + _face * (0.5f * _bs);
+            Vector3 bottom = new Vector3(stand.x, _ledgeTop + _cc.radius + 0.05f * _bs, stand.z);
             bool room = !Physics.CheckCapsule(bottom, bottom + Vector3.up * (Controller.StandingHeight - 2f * _cc.radius),
                 _cc.radius * 0.9f, Controller.GroundLayers, QueryTriggerInteraction.Ignore);
             if (!room) return; // keep hanging
@@ -246,7 +246,7 @@ namespace CharacterControllerSystem
             SetFloat(HangMoveId, 0f);
             if (Parkour == null || !Parkour.BeginFromHere(ParkourKind.ClimbFromHang, _face, _ledgeTop,
                     new Vector3(_edge.x, _ledgeTop, _edge.z)))
-                Detach(-_face * 0.15f);
+                Detach(-_face * (0.15f * _bs));
         }
 
         // ---------------------------------------------------------------- ladders
@@ -266,23 +266,23 @@ namespace CharacterControllerSystem
                 Vector3 rel = pos - ladder.Bottom;
                 Vector3 right = Vector3.Cross(Vector3.up, ladder.Out);
                 float lateral = Vector3.Dot(rel, right);
-                if (Mathf.Abs(lateral) > ladder.HalfWidth + 0.2f) continue;
+                if (Mathf.Abs(lateral) > ladder.HalfWidth + 0.2f * _bs) continue;
                 float front = Vector3.Dot(rel, ladder.Out);
                 float h = pos.y - ladder.Bottom.y;
 
                 // From the bottom (or anywhere along it): facing the ladder, just in front of it.
                 // Needs forward on the stick too: that is what climbs, so holding "down" never re-grabs it.
-                if (front > -0.05f && front < 0.9f && h > -0.3f && h < ladder.Height - LadderTopExit &&
+                if (front > -0.05f * _bs && front < 0.9f * _bs && h > -0.3f * _bs && h < ladder.Height - LadderTopExit &&
                     Vector3.Dot(fwd, -ladder.Out) > 0.6f && _inputs.move.y > 0.3f)
                 {
                     Attach(ladder, Mathf.Max(h, 0f) + ladder.Bottom.y);
                     return true;
                 }
                 // From the top: walking off the platform edge towards the ladder.
-                if (front > -0.9f && front < 0.2f && Mathf.Abs(h - ladder.Height) < 0.35f &&
+                if (front > -0.9f * _bs && front < 0.2f * _bs && Mathf.Abs(h - ladder.Height) < 0.35f * _bs &&
                     Vector3.Dot(fwd, ladder.Out) > 0.6f && Controller.Grounded)
                 {
-                    Attach(ladder, ladder.Top.y - LadderTopExit - 0.05f);
+                    Attach(ladder, ladder.Top.y - LadderTopExit - 0.05f * _bs);
                     return true;
                 }
             }
@@ -308,7 +308,7 @@ namespace CharacterControllerSystem
             if (_inputs.jump)
             {
                 _inputs.jump = false;
-                Detach(_ladder.Out * 0.35f);
+                Detach(_ladder.Out * (0.35f * _bs));
                 return;
             }
 
@@ -320,7 +320,7 @@ namespace CharacterControllerSystem
             {
                 _ladderY = _ladder.Bottom.y;
                 PlaceOnLadder();
-                Detach(_ladder.Out * 0.1f);
+                Detach(_ladder.Out * (0.1f * _bs));
                 return;
             }
             if (v > 0f && _ladderY >= _ladder.Top.y - LadderTopExit)
@@ -421,6 +421,25 @@ namespace CharacterControllerSystem
                 }
             }
             return found;
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            MinGrabHeight *= k;
+            MaxGrabHeight *= k;
+            HangHandHeight *= k;
+            WallDistance *= k;
+            ShimmySpeed *= k;
+            LadderSpeed *= k;
+            LadderClipSpeed *= k;
+            LadderDistance *= k;
+            LadderTopExit *= k;
+            _bs = s;
         }
     }
 }

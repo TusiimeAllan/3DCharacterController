@@ -56,6 +56,7 @@
   <Project Path="Unity.Multiplayer.Center.Common.csproj" />
   <Project Path="Unity.ProBuilder.KdTree.csproj" />
   <Project Path="Unity.ProBuilder.AddOns.Editor.csproj" />
+  <Project Path="CharacterControllerSystem.Runtime.csproj" />
   <Project Path="Unity.RenderPipelines.Core.Runtime.Shared.csproj" />
   <Project Path="Unity.InputSystem.ForUI.csproj" />
   <Project Path="MxM.Demo.csproj" />
@@ -67,7 +68,6 @@
   <Project Path="Unity.PathTracing.Runtime.csproj" />
   <Project Path="CharacterControllerSystem.Editor.csproj" />
   <Project Path="Unity.PathTracing.Editor.csproj" />
-  <Project Path="CharacterControllerSystem.Runtime.csproj" />
   <Project Path="Unity.ProBuilder.AssetIdRemapUtility.csproj" />
   <Project Path="Unity.Settings.Editor.csproj" />
   <Project Path="Unity.InputSystem.TestFramework.csproj" />

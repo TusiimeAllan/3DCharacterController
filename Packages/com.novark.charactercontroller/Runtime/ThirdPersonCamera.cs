@@ -12,7 +12,7 @@ namespace CharacterControllerSystem
     /// camera never passes through geometry (sphere-cast from the pivot).
     /// </summary>
     [DefaultExecutionOrder(50)] // after the player has moved
-    public class ThirdPersonCamera : MonoBehaviour
+    public class ThirdPersonCamera : MonoBehaviour, IBodyScaled
     {
         [Header("Target")]
         [Tooltip("The point the camera looks at and orbits (usually a head-height socket on the player)")]
@@ -132,11 +132,11 @@ namespace CharacterControllerSystem
             Vector3 pivot = new Vector3(Target.position.x, _pivotY, Target.position.z);
             // Under a low roof (a tunnel, a crawlspace) the orbit point stays below it, or every cast starts
             // inside the ceiling and the camera ends up in the player's head.
-            Vector3 low = Target.position + Vector3.up * 0.3f;
+            Vector3 low = Target.position + Vector3.up * (0.3f * _bs);
             float above = pivot.y - low.y + CollisionRadius;
             if (above > 0f && Physics.SphereCast(low, CollisionRadius * 0.5f, Vector3.up, out RaycastHit roof, above,
                     CollisionLayers, QueryTriggerInteraction.Ignore) && !IsPlayer(roof.transform))
-                pivot.y = Mathf.Max(low.y, roof.point.y - CollisionRadius - 0.05f);
+                pivot.y = Mathf.Max(low.y, roof.point.y - CollisionRadius - 0.05f * _bs);
             int pointCount = GatherSightPoints();
             if (relaxed) pointCount = Mathf.Min(pointCount, 2);
 
@@ -268,7 +268,7 @@ namespace CharacterControllerSystem
             Vector3 cam = pivot + back * Distance;
             // Find the ground under the camera, starting from the orbit point's height (never a roof above it).
             Vector3 from = new Vector3(cam.x, pivot.y, cam.z);
-            if (!Physics.SphereCast(from, CollisionRadius * 0.5f, Vector3.down, out RaycastHit ground, pivot.y - cam.y + GroundClearance + 1f,
+            if (!Physics.SphereCast(from, CollisionRadius * 0.5f, Vector3.down, out RaycastHit ground, pivot.y - cam.y + GroundClearance + 1f * _bs,
                     CollisionLayers, QueryTriggerInteraction.Ignore) || IsPlayer(ground.transform)) return 0f;
             float minY = ground.point.y + GroundClearance;
             if (cam.y >= minY) return 0f;
@@ -335,16 +335,32 @@ namespace CharacterControllerSystem
                 if (n > 0) return n;
             }
             Vector3 p = _player.position;
-            _points[0] = p + Vector3.up * 1.65f;
-            _points[1] = p + Vector3.up * 1.2f;
-            _points[2] = p + Vector3.up * 0.9f;
-            _points[3] = p + Vector3.up * 0.15f;
+            _points[0] = p + Vector3.up * (1.65f * _bs);
+            _points[1] = p + Vector3.up * (1.2f * _bs);
+            _points[2] = p + Vector3.up * (0.9f * _bs);
+            _points[3] = p + Vector3.up * (0.15f * _bs);
             return 4;
         }
 
+        private Transform _resolvedTarget;
+
         private void ResolvePlayer()
         {
-            if (_player == null)
+            // Pointed at another character (respawn, Make Playable, switching control): find it again.
+            if (Target != _resolvedTarget)
+            {
+                bool retarget = _resolvedTarget != null;
+                _resolvedTarget = Target;
+                _player = null;
+                _controller = null;
+                _playerAnimator = null;
+                if (retarget)
+                {
+                    _currentDistance = Distance;
+                    _pivotYReady = false;
+                }
+            }
+            if (_player == null && Target != null)
             {
                 var cc = Target.GetComponentInParent<CharacterController>();
                 _player = cc != null ? cc.transform : Target.root;
@@ -356,5 +372,21 @@ namespace CharacterControllerSystem
         }
 
         private bool IsPlayer(Transform t) => _player != null && t.IsChildOf(_player);
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            Distance *= k;
+            HeightOffset *= k;
+            CollisionRadius *= k;
+            MinDistance *= k;
+            SightRadius *= k;
+            GroundClearance *= k;
+            _bs = s;
+        }
     }
 }

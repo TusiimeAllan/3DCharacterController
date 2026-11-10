@@ -18,7 +18,7 @@ namespace CharacterControllerSystem
     /// </summary>
     [DisallowMultipleComponent]
     [RequireComponent(typeof(Animator))]
-    public class HumanoidGrounding : MonoBehaviour
+    public class HumanoidGrounding : MonoBehaviour, IBodyScaled
     {
         public bool EnableGrounding = true;
         public bool EnableLookAt = true;
@@ -198,7 +198,7 @@ namespace CharacterControllerSystem
             // The hips settle back from each step's impact on a damped spring.
             float c = 2f * Mathf.Sqrt(ImpactSpring) * ImpactDamping;
             _impactVelocity += (-ImpactSpring * _impact - c * _impactVelocity) * dt;
-            _impact = Mathf.Clamp(_impact + _impactVelocity * dt, -0.06f, 0.03f);
+            _impact = Mathf.Clamp(_impact + _impactVelocity * dt, -0.06f * _bs, 0.03f * _bs);
 
             ApplyFoot(ref _left, leftHit, leftTarget, leftRot, dt);
             ApplyFoot(ref _right, rightHit, rightTarget, rightRot, dt);
@@ -284,7 +284,7 @@ namespace CharacterControllerSystem
                     foot.Locked = true;
                     foot.LockPosition = target;
                     float speed = Controller != null ? Controller.LocalVelocity.magnitude : 0f;
-                    if (speed > 0.3f) _impactVelocity -= StepImpact * Mathf.Clamp01(speed / 4f + 0.25f);
+                    if (speed > 0.3f * _bs) _impactVelocity -= StepImpact * Mathf.Clamp01(speed / (4f * _bs) + 0.25f);
                 }
             }
             else
@@ -314,7 +314,7 @@ namespace CharacterControllerSystem
                 target = Mathf.InverseLerp(-0.1f, 0.4f, facing) * LookWeight;
                 Vector3 head = _animator.GetBoneTransform(HumanBodyBones.Head) != null
                     ? _animator.GetBoneTransform(HumanBodyBones.Head).position
-                    : transform.position + Vector3.up * 1.6f;
+                    : transform.position + Vector3.up * (1.6f * _bs);
                 Vector3 desired = head + camForward * 10f;
                 _lookTarget = _lookWeight <= 0.001f ? desired : Vector3.Lerp(_lookTarget, desired, 1f - Mathf.Exp(-LookSmoothing * dt));
             }
@@ -341,6 +341,24 @@ namespace CharacterControllerSystem
                 }
             }
             return found;
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            RayStartHeight *= k;
+            MaxStepDown *= k;
+            MaxPelvisDrop *= k;
+            PlantHeight *= k;
+            PlantSpeed *= k;
+            ReleaseHeight *= k;
+            MaxLockDrift *= k;
+            StepImpact *= k;
+            _bs = s;
         }
     }
 }

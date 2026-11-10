@@ -56,6 +56,10 @@ GameObject:
   - component: {fileID: 3353249065561955869}
   - component: {fileID: 8225256201702108598}
   - component: {fileID: 3592659843899974292}
+  - component: {fileID: 5777314696183077154}
+  - component: {fileID: 4215535746457496109}
+  - component: {fileID: 590979781118600983}
+  - component: {fileID: 7856241364748613738}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -83,7 +87,7 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!143 &6244769172814098968
 CharacterController:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -109,7 +113,7 @@ CharacterController:
 --- !u!95 &1831847853376694199
 Animator:
   serializedVersion: 7
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -130,7 +134,7 @@ Animator:
   m_WriteDefaultValuesOnDisable: 0
 --- !u!114 &6784669559435407594
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -155,7 +159,7 @@ MonoBehaviour:
   gamepadScheme: Gamepad
 --- !u!114 &8766155822904003866
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -210,7 +214,7 @@ MonoBehaviour:
   StrafeTurnDuration: 0.9
 --- !u!114 &8954366063464921596
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -240,7 +244,7 @@ MonoBehaviour:
   m_Camera: {fileID: 0}
 --- !u!114 &6188695867054075681
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -264,7 +268,7 @@ MonoBehaviour:
   PreserveAnimatorState: 1
 --- !u!114 &5929075747165873922
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -371,7 +375,7 @@ MonoBehaviour:
   m_enableIdle: 1
 --- !u!114 &5163338868927937640
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -401,7 +405,7 @@ MonoBehaviour:
   m_trajectoryGeneratorModule: {fileID: 0}
 --- !u!114 &5856110124234482876
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -432,7 +436,7 @@ MonoBehaviour:
   StrideMatchLimits: {x: 0.8, y: 1.4}
 --- !u!114 &2188630293081521149
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -475,7 +479,7 @@ MonoBehaviour:
   LookSmoothing: 6
 --- !u!114 &5671638418268805908
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -505,7 +509,7 @@ MonoBehaviour:
   TalkKey: 34
 --- !u!114 &4888496659026386051
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -539,7 +543,7 @@ MonoBehaviour:
   SlideHeight: 1
 --- !u!114 &2027868552323421969
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -565,7 +569,7 @@ MonoBehaviour:
   AlignRate: 10
 --- !u!114 &3353249065561955869
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -606,7 +610,7 @@ MonoBehaviour:
   MaxClimbOutHeight: 0.9
 --- !u!114 &8225256201702108598
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -620,7 +624,7 @@ MonoBehaviour:
   Volume: 0.8
 --- !u!114 &3592659843899974292
 MonoBehaviour:
-  m_ObjectHideFlags: 0
+  m_ObjectHideFlags: 2
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
@@ -642,6 +646,83 @@ MonoBehaviour:
   PlantInRate: 14
   PlantOutRate: 7
   PlantWindow: {x: 0.08, y: 0.85}
+--- !u!114 &5777314696183077154
+MonoBehaviour:
+  m_ObjectHideFlags: 2
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5cb318335216abd4abff9606b5ca2053, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CharacterControllerSystem.Runtime::CharacterControllerSystem.CharacterDimensions
+  ReferenceHumanScale: 1.050076
+  AutoMeasure: 1
+  ScaleMultiplier: 1
+--- !u!114 &4215535746457496109
+MonoBehaviour:
+  m_ObjectHideFlags: 2
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cd137af5e2618654d9c69b477e49f121, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CharacterControllerSystem.Runtime::CharacterControllerSystem.CharacterMountController
+  InteractToggles: 1
+  MountBlend: 0.35
+  HandWeight: 1
+  FootWeight: 1
+--- !u!114 &590979781118600983
+MonoBehaviour:
+  m_ObjectHideFlags: 2
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 600f0568b2ffb304fbf2a85b97f14193, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CharacterControllerSystem.Runtime::CharacterControllerSystem.CharacterSockets
+  Sockets:
+  - Name: RightHand
+    Bone: 18
+    Position: {x: 0, y: 0.08, z: 0.02}
+    Rotation: {x: 0, y: 0, z: 0}
+  - Name: LeftHand
+    Bone: 17
+    Position: {x: 0, y: 0.08, z: 0.02}
+    Rotation: {x: 0, y: 0, z: 0}
+  - Name: Back
+    Bone: 54
+    Position: {x: 0, y: 0, z: -0.18}
+    Rotation: {x: 0, y: 0, z: 0}
+  - Name: Hips
+    Bone: 0
+    Position: {x: 0.18, y: 0, z: 0}
+    Rotation: {x: 0, y: 0, z: 0}
+  - Name: Head
+    Bone: 10
+    Position: {x: 0, y: 0.12, z: 0}
+    Rotation: {x: 0, y: 0, z: 0}
+--- !u!114 &7856241364748613738
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7500574589923400414}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e07a9917229aed44adeeebe2336eff1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: CharacterControllerSystem.Runtime::CharacterControllerSystem.CharacterControllerRig
+  ShowComponents: 0
 --- !u!1001 &522284757545489599
 PrefabInstance:
   m_ObjectHideFlags: 0

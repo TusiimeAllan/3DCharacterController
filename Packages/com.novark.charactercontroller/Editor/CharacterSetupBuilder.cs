@@ -1,4 +1,5 @@
-using System.IO;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -7,30 +8,88 @@ using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
+using static CharacterControllerSystem.EditorTools.AnimatorBuildUtil;
+using Object = UnityEngine.Object;
 
 namespace CharacterControllerSystem.EditorTools
 {
+    /// <summary>Small editor helpers shared by the builders.</summary>
+    public static class Kit
+    {
+        /// <summary>Record changes for undo (scene objects); off while editing prefab contents.</summary>
+        public static bool UseUndo;
+
+        public static T Ensure<T>(GameObject go) where T : Component
+        {
+            var c = go.GetComponent<T>();
+            if (c != null) return c;
+            return UseUndo ? Undo.AddComponent<T>(go) : go.AddComponent<T>();
+        }
+    }
+
     /// <summary>
-    /// Builds the Animator Controller, Player prefab and scene rig from a
-    /// <see cref="CharacterSetupProfile"/>. Invoked from the profile's Inspector buttons.
+    /// Optional parts of the kit (motion matching) hook into the Player setup through this, so the core
+    /// builder does not depend on them.
+    /// </summary>
+    public static class CharacterKitModules
+    {
+        /// <summary>Called after the core components are on the Player; return a short description of what was added.</summary>
+        public delegate string PlayerModule(GameObject player, CharacterSetupProfile profile, AnimatorController controller);
+
+        /// <summary>Called on every Animator Controller build, after the kit's states: add your own states here.</summary>
+        public delegate void AnimatorModule(AnimatorController controller, CharacterSetupProfile profile);
+
+        private static readonly List<PlayerModule> Modules = new List<PlayerModule>();
+        private static readonly List<AnimatorModule> AnimatorModules = new List<AnimatorModule>();
+
+        public static void Register(PlayerModule module)
+        {
+            if (!Modules.Contains(module)) Modules.Add(module);
+        }
+
+        public static void Register(AnimatorModule module)
+        {
+            if (!AnimatorModules.Contains(module)) AnimatorModules.Add(module);
+        }
+
+        internal static IEnumerable<PlayerModule> All => Modules;
+        internal static IEnumerable<AnimatorModule> AllAnimator => AnimatorModules;
+    }
+
+    /// <summary>
+    /// Builds the Animator Controller, Player prefab and scene rig from a <see cref="CharacterSetupProfile"/>.
+    /// Every feature reads its clips from the profile and is skipped (with a warning) when they are missing.
     /// </summary>
     public static class CharacterSetupBuilder
     {
-        private const string Tag = "[CharacterController]";
+        private const string Tag = "[CharacterKit]";
+
+        /// <summary>Every parameter any component writes, so none of them ever logs "parameter does not exist".</summary>
+        private static readonly (string name, AnimatorControllerParameterType type)[] Parameters =
+        {
+            ("Speed", AnimatorControllerParameterType.Float), ("MotionSpeed", AnimatorControllerParameterType.Float),
+            ("Grounded", AnimatorControllerParameterType.Bool), ("Jump", AnimatorControllerParameterType.Bool),
+            ("FreeFall", AnimatorControllerParameterType.Bool), ("Crouch", AnimatorControllerParameterType.Bool),
+            ("FallSpeed", AnimatorControllerParameterType.Float), ("Strafing", AnimatorControllerParameterType.Bool),
+            ("StrafeX", AnimatorControllerParameterType.Float), ("StrafeZ", AnimatorControllerParameterType.Float),
+            ("StrafeTurn", AnimatorControllerParameterType.Int), ("SlopeSlide", AnimatorControllerParameterType.Bool),
+            ("Parkour", AnimatorControllerParameterType.Int), ("Hanging", AnimatorControllerParameterType.Bool),
+            ("HangMove", AnimatorControllerParameterType.Float), ("OnLadder", AnimatorControllerParameterType.Bool),
+            ("LadderSpeed", AnimatorControllerParameterType.Float), ("Swimming", AnimatorControllerParameterType.Bool),
+            ("SwimSpeed", AnimatorControllerParameterType.Float), ("Action", AnimatorControllerParameterType.Int),
+            ("Dead", AnimatorControllerParameterType.Bool), ("DeathIndex", AnimatorControllerParameterType.Int),
+            ("Sitting", AnimatorControllerParameterType.Bool), ("Pushing", AnimatorControllerParameterType.Bool),
+            ("Hit", AnimatorControllerParameterType.Trigger), ("HitIndex", AnimatorControllerParameterType.Int),
+            ("Mounted", AnimatorControllerParameterType.Bool), ("MountPose", AnimatorControllerParameterType.Int),
+        };
 
         // ---------------------------------------------------------------- Animator
 
         public static AnimatorController BuildAnimator(CharacterSetupProfile p)
         {
-            EnsureFolder(p.ControllerPath);
-            var controller = AnimatorController.CreateAnimatorControllerAtPath(p.ControllerPath);
+            var controller = ResetController(p.ControllerPath);
 
-            controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
-            controller.AddParameter("MotionSpeed", AnimatorControllerParameterType.Float);
-            controller.AddParameter("Grounded", AnimatorControllerParameterType.Bool);
-            controller.AddParameter("Jump", AnimatorControllerParameterType.Bool);
-            controller.AddParameter("FreeFall", AnimatorControllerParameterType.Bool);
-            controller.AddParameter("Crouch", AnimatorControllerParameterType.Bool);
+            foreach (var (name, type) in Parameters) Param(controller, name, type);
             SetDefaultBool(controller, "Grounded", true);
 
             var sm = controller.layers[0].stateMachine;
@@ -48,8 +107,6 @@ namespace CharacterControllerSystem.EditorTools
             crouchTree.blendType = BlendTreeType.Simple1D;
             crouchTree.blendParameter = "Speed";
             crouchTree.useAutomaticThresholds = false;
-            AddChild(crouchTree, p.CrouchIdle, 0f, nameof(p.CrouchIdle));
-            AddChild(crouchTree, p.CrouchWalk, p.CrouchWalkThreshold, nameof(p.CrouchWalk));
 
             var jumpState = sm.AddState("Jump");
             jumpState.motion = Warn(p.Jump, nameof(p.Jump));
@@ -58,8 +115,11 @@ namespace CharacterControllerSystem.EditorTools
 
             sm.defaultState = locoState;
 
-            AddTransition(locoState, crouchState, p.CrouchTransition, ("Crouch", true));
-            AddTransition(crouchState, locoState, p.CrouchTransition, ("Crouch", false));
+            if (p.EnableCrouch)
+            {
+                AddTransition(locoState, crouchState, p.CrouchTransition, ("Crouch", true));
+                AddTransition(crouchState, locoState, p.CrouchTransition, ("Crouch", false));
+            }
             AddTransition(locoState, jumpState, p.JumpTransition, ("Jump", true));
 
             var jumpToFall = jumpState.AddTransition(fallState);
@@ -71,17 +131,49 @@ namespace CharacterControllerSystem.EditorTools
             AddTransition(fallState, locoState, p.LandTransition, ("Grounded", true));
             AddTransition(jumpState, locoState, p.LandTransition, ("Grounded", true));
 
+            var built = new List<string> { "locomotion", "jump", "fall" };
+            void Feature(bool enabled, string name, Func<bool> build)
+            {
+                if (enabled && build()) built.Add(name);
+            }
+            Feature(true, "landings", () => AirborneStatesBuilder.Apply(controller, p));
+            Feature(p.EnableCrouch, "crouch", () => CrouchStatesBuilder.Apply(controller, p));
+            Feature(p.EnableActions, "actions", () => ActionStatesBuilder.Apply(controller, p));
+            Feature(p.EnableStrafe, "strafe", () => StrafeStatesBuilder.Apply(controller, p));
+            Feature(p.EnableParkour, "parkour", () => ParkourBuilder.ApplyAnimator(controller, ParkourBuilder.BuildLibrary(p)));
+            Feature(p.EnableSlopeSlide, "slope slide", () => SlopeStatesBuilder.Apply(controller, p));
+            Feature(p.EnableClimbing, "ledges and ladders", () => ClimbStatesBuilder.Apply(controller, p));
+            Feature(p.EnableSwimming, "swimming", () => SwimStatesBuilder.Apply(controller, p));
+            Feature(p.EnableMounts, "mounts", () => MountStatesBuilder.Apply(controller, p));
+            foreach (var module in CharacterKitModules.AllAnimator) module(controller, p);
+            StrafeStatesBuilder.SyncExits(controller); // strafe reaches everything added after it
+
+            // Foot grounding and the body IK run in the IK pass of every layer.
+            var layers = controller.layers;
+            for (int i = 0; i < layers.Length; i++) layers[i].iKPass = true;
+            controller.layers = layers;
+
             EditorUtility.SetDirty(controller);
             AssetDatabase.SaveAssets();
-            AirborneStatesBuilder.Apply(controller); // UAL jump start/loop/land and hard-landing roll
-            CrouchStatesBuilder.Apply(controller); // UAL crouch idle/walk matched to the crouch speed
-            ActionStatesBuilder.Apply(controller); // hits, death, sit, interact, punches, emotes, push
-            StrafeStatesBuilder.Apply(controller); // face the camera and move in any direction
-            ParkourBuilder.ApplyAnimator(controller); // hurdle, climb and drop states
-            SlopeStatesBuilder.Apply(controller); // slide pose for slopes over the limit
-            ClimbStatesBuilder.Apply(controller); // ledge hang, shimmy and ladder
-            SwimStatesBuilder.Apply(controller); // treading water and swimming
-            Debug.Log($"{Tag} Animator built at {p.ControllerPath}", controller);
+            Debug.Log($"{Tag} Animator built at {p.ControllerPath}: {string.Join(", ", built)}.", controller);
+            return controller;
+        }
+
+        /// <summary>
+        /// An empty controller at the path. An existing one is emptied in place, so its GUID (and every prefab
+        /// or scene that uses it) stays valid.
+        /// </summary>
+        private static AnimatorController ResetController(string path)
+        {
+            EnsureFolderFor(path);
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(path);
+            if (controller == null) return AnimatorController.CreateAnimatorControllerAtPath(path);
+
+            foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(path))
+                if (sub != null && sub != controller && !(sub is AnimatorController)) Object.DestroyImmediate(sub, true);
+            controller.parameters = Array.Empty<AnimatorControllerParameter>();
+            controller.layers = Array.Empty<AnimatorControllerLayer>();
+            controller.AddLayer("Base Layer");
             return controller;
         }
 
@@ -89,32 +181,104 @@ namespace CharacterControllerSystem.EditorTools
 
         public static GameObject BuildPlayerPrefab(CharacterSetupProfile p)
         {
-            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(p.ControllerPath)
-                             ?? BuildAnimator(p);
+            var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(p.ControllerPath) ?? BuildAnimator(p);
 
-            var models = p.Characters.Where(c => c != null && c.Model != null).ToList();
+            var models = p.PlayableCharacters();
             if (models.Count == 0)
             {
-                Debug.LogError($"{Tag} Add at least one character model to the profile.", p);
+                Debug.LogError($"{Tag} No character to build: add one in the wizard (the bundled X Bot is missing too).", p);
                 return null;
             }
 
-            var root = new GameObject("Player");
+            Kit.UseUndo = false;
+            // An existing Player is updated in place: every component keeps its identity and tuning, so scenes
+            // that use it (and anything added to their instances) stay connected.
+            bool update = AssetDatabase.LoadAssetAtPath<GameObject>(p.PrefabPath) != null;
+            var root = update ? PrefabUtility.LoadPrefabContents(p.PrefabPath) : new GameObject("Player");
+            try
+            {
+                if (!update)
+                {
+                    var cc = root.AddComponent<CharacterController>();
+                    cc.center = new Vector3(0f, p.Height * 0.5f, 0f);
+                    cc.height = p.Height;
+                    cc.radius = p.Radius;
+                    cc.slopeLimit = p.SlopeLimit;
+                    cc.stepOffset = p.StepOffset;
+                }
+                var animator = Kit.Ensure<Animator>(root);
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;
 
-            var cc = root.AddComponent<CharacterController>();
-            cc.center = new Vector3(0f, p.Height * 0.5f, 0f);
-            cc.height = p.Height;
-            cc.radius = p.Radius;
-            cc.slopeLimit = p.SlopeLimit;
-            cc.stepOffset = p.StepOffset;
+                SyncCharacters(root, animator, models, p.DefaultCharacter);
+                ConfigurePlayer(root, p, controller);
 
-            var animator = root.AddComponent<Animator>();
-            animator.runtimeAnimatorController = controller;
+                EnsureFolderFor(p.PrefabPath);
+                var prefab = PrefabUtility.SaveAsPrefabAsset(root, p.PrefabPath);
+                AssetDatabase.SaveAssets();
+                Debug.Log($"{Tag} Player prefab {(update ? "updated" : "built")} at {p.PrefabPath} with {string.Join(", ", models.Select(m => m.Name))}.", prefab);
+                return prefab;
+            }
+            finally
+            {
+                if (update) PrefabUtility.UnloadPrefabContents(root);
+                else Object.DestroyImmediate(root);
+            }
+        }
+
+        /// <summary>
+        /// Makes the switcher hold exactly these characters: keeps the ones already there (and their
+        /// placement), adds new ones, removes the ones no longer listed (so X Bot disappears once you use
+        /// your own characters).
+        /// </summary>
+        private static void SyncCharacters(GameObject root, Animator animator,
+            List<CharacterSetupProfile.CharacterModel> models, int defaultCharacter)
+        {
+            var switcher = Kit.Ensure<CharacterSwitcher>(root);
+            var swSo = new SerializedObject(switcher);
+            swSo.FindProperty("_animator").objectReferenceValue = animator;
+            swSo.ApplyModifiedPropertiesWithoutUndo();
+
+            GameObject SourceOf(CharacterSwitcher.CharacterEntry e) =>
+                e?.Root != null ? PrefabUtility.GetCorrespondingObjectFromSource(e.Root) : null;
+
+            var kept = new List<CharacterSwitcher.CharacterEntry>();
+            foreach (var m in models)
+            {
+                var existing = switcher.Characters.FirstOrDefault(e => SourceOf(e) == m.Model && !kept.Contains(e));
+                if (existing != null)
+                {
+                    existing.Name = string.IsNullOrEmpty(m.Name) ? existing.Name : m.Name;
+                    existing.Avatar = FindAvatar(m.Model);
+                    kept.Add(existing);
+                }
+                else kept.Add(CreateCharacterChild(root.transform, m.Model, m.Name, false));
+            }
+            foreach (var old in switcher.Characters.Where(e => !kept.Contains(e)).ToList())
+                if (old?.Root != null) Object.DestroyImmediate(old.Root);
+            switcher.Characters = kept;
+
+            int index = Mathf.Clamp(defaultCharacter, 0, kept.Count - 1);
+            for (int i = 0; i < kept.Count; i++) kept[i].Root.SetActive(i == index);
+            swSo.Update();
+            swSo.FindProperty("_activeIndex").intValue = index;
+            swSo.ApplyModifiedPropertiesWithoutUndo();
+            animator.avatar = kept[index].Avatar;
+        }
+
+        /// <summary>
+        /// Adds and wires every component the controller's features need. Works on prefab contents and on a
+        /// model already in a scene (Make Playable). Components for features the controller lacks are not added.
+        /// </summary>
+        public static void ConfigurePlayer(GameObject root, CharacterSetupProfile p, AnimatorController controller)
+        {
+            var cc = Kit.Ensure<CharacterController>(root);
+            var animator = Kit.Ensure<Animator>(root);
+            if (controller != null) animator.runtimeAnimatorController = controller;
             animator.applyRootMotion = false;
 
-            var inputs = root.AddComponent<PlayerInputs>();
-
-            var tpc = root.AddComponent<ThirdPersonController>();
+            var inputs = Kit.Ensure<PlayerInputs>(root);
+            var tpc = Kit.Ensure<ThirdPersonController>(root);
             tpc.GroundLayers = p.GroundLayers;
             tpc.StandingHeight = p.Height;
             tpc.GroundedRadius = p.Radius;
@@ -124,46 +288,59 @@ namespace CharacterControllerSystem.EditorTools
             tpcSo.FindProperty("_animator").objectReferenceValue = animator;
             tpcSo.ApplyModifiedPropertiesWithoutUndo();
 
-            var camRoot = new GameObject("CameraRoot");
-            camRoot.transform.SetParent(root.transform, false);
-            camRoot.transform.localPosition = new Vector3(0f, p.CameraRootHeight, 0f);
+            if (root.transform.Find("CameraRoot") == null)
+            {
+                var camRoot = new GameObject("CameraRoot");
+                if (Kit.UseUndo) Undo.RegisterCreatedObjectUndo(camRoot, "Make Playable");
+                camRoot.transform.SetParent(root.transform, false);
+                camRoot.transform.localPosition = new Vector3(0f, p.CameraRootHeight, 0f);
+            }
 
 #if ENABLE_INPUT_SYSTEM
-            var pi = root.AddComponent<PlayerInput>();
+            var pi = Kit.Ensure<PlayerInput>(root);
             pi.actions = p.InputActions;
             pi.defaultActionMap = p.DefaultActionMap;
             pi.notificationBehavior = PlayerNotifications.SendMessages;
 #endif
+            Kit.Ensure<CharacterDimensions>(root);
 
-            // Every character lives in the hierarchy; the switcher just toggles them.
-            var switcher = root.AddComponent<CharacterSwitcher>();
-            var swSo = new SerializedObject(switcher);
-            swSo.FindProperty("_animator").objectReferenceValue = animator;
-            swSo.ApplyModifiedPropertiesWithoutUndo();
-
-            int defaultIndex = Mathf.Clamp(p.DefaultCharacter, 0, models.Count - 1);
-            for (int i = 0; i < models.Count; i++)
+            bool Has(string state) => State(controller, state) != null;
+            if (p.EnableCrouch) CrouchStatesBuilder.SetUpPlayer(root, p);
+            if (p.EnableActions && Has("Interact")) ActionStatesBuilder.SetUpPlayer(root, p);
+            if (p.EnableParkour)
             {
-                var entry = CreateCharacterChild(root.transform, models[i].Model, models[i].Name, false);
-                entry.Root.SetActive(i == defaultIndex);
-                switcher.Characters.Add(entry);
+                var library = AssetDatabase.LoadAssetAtPath<ParkourLibrary>(p.ParkourLibraryPath);
+                if (library != null && library.Moves.Count > 0) ParkourBuilder.SetUpPlayer(root, library);
             }
-            swSo.Update();
-            swSo.FindProperty("_activeIndex").intValue = defaultIndex;
-            swSo.ApplyModifiedPropertiesWithoutUndo();
-            animator.avatar = switcher.Characters[defaultIndex].Avatar;
+            if (p.EnableClimbing && Has("Hang Idle")) ClimbStatesBuilder.SetUpPlayer(root, p);
+            if (p.EnableSwimming && Has("Swim")) SwimStatesBuilder.SetUpPlayer(root, p);
+            if (p.EnableBodyContact)
+            {
+                var solver = Kit.Ensure<BodyContactSolver>(root);
+                solver.Controller = tpc;
+                solver.Parkour = root.GetComponent<ParkourController>();
+            }
+            if (p.EnableGrounding)
+            {
+                var grounding = Kit.Ensure<HumanoidGrounding>(root);
+                grounding.Controller = tpc;
+                grounding.GroundLayers = p.GroundLayers;
+            }
+            if (p.EnableMounts && Has("Mounted")) Kit.Ensure<CharacterMountController>(root);
+            Kit.Ensure<CharacterSockets>(root);
+            Kit.Ensure<CharacterControllerRig>(root);
 
-            EnsureFolder(p.PrefabPath);
-            var prefab = PrefabUtility.SaveAsPrefabAsset(root, p.PrefabPath);
-            Object.DestroyImmediate(root);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"{Tag} Player prefab built at {p.PrefabPath}", prefab);
-            return prefab;
+            foreach (var module in CharacterKitModules.All)
+            {
+                string added = module(root, p, controller);
+                if (!string.IsNullOrEmpty(added)) Debug.Log($"{Tag} {added}");
+            }
+            CharacterControllerRig.HideParts(root.GetComponent<CharacterControllerRig>(), true);
         }
 
         /// <summary>
-        /// Instantiates a model as a child character, strips its own Animator (the Player's
-        /// Animator drives it) and returns a filled switcher entry.
+        /// Instantiates a model as a child character, strips its own Animator (the Player's Animator drives it)
+        /// and returns a filled switcher entry.
         /// </summary>
         public static CharacterSwitcher.CharacterEntry CreateCharacterChild(Transform parent, GameObject model,
             string name, bool undo)
@@ -182,7 +359,7 @@ namespace CharacterControllerSystem.EditorTools
 
             var avatar = FindAvatar(model);
             if (avatar == null || !avatar.isHuman)
-                Debug.LogWarning($"{Tag} '{go.name}' has no valid Humanoid avatar; it cannot share the animation.", model);
+                Debug.LogWarning($"{Tag} '{go.name}' has no valid Humanoid avatar; run it through the Character Wizard.", model);
 
             return new CharacterSwitcher.CharacterEntry { Name = go.name, Root = go, Avatar = avatar };
         }
@@ -192,8 +369,19 @@ namespace CharacterControllerSystem.EditorTools
             string path = AssetDatabase.GetAssetPath(model);
             var avatar = string.IsNullOrEmpty(path)
                 ? null
-                : AssetDatabase.LoadAllAssetsAtPath(path).OfType<Avatar>().FirstOrDefault();
-            if (avatar == null && model.TryGetComponent<Animator>(out var a)) avatar = a.avatar;
+                : AssetDatabase.LoadAllAssetsAtPath(path).OfType<Avatar>().FirstOrDefault(a => a.isHuman) ??
+                  AssetDatabase.LoadAllAssetsAtPath(path).OfType<Avatar>().FirstOrDefault();
+            if ((avatar == null || !avatar.isHuman) && model.TryGetComponent<Animator>(out var a) && a.avatar != null) avatar = a.avatar;
+            if ((avatar == null || !avatar.isHuman) && !string.IsNullOrEmpty(path))
+            {
+                // A prefab built on a model file: the avatar lives on the model.
+                var source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(model);
+                if (source != null && source != model)
+                {
+                    var sourceAvatar = AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(source)).OfType<Avatar>().FirstOrDefault(x => x.isHuman);
+                    if (sourceAvatar != null) avatar = sourceAvatar;
+                }
+            }
             return avatar;
         }
 
@@ -208,7 +396,7 @@ namespace CharacterControllerSystem.EditorTools
             foreach (var old in Object.FindObjectsByType<ThirdPersonController>(FindObjectsInactive.Include))
                 Undo.DestroyObjectImmediate(old.gameObject);
 
-            if (p.CreateGroundIfMissing && GameObject.Find("Ground") == null)
+            if (p.CreateGroundIfMissing && !Object.FindObjectsByType<Collider>(FindObjectsInactive.Exclude).Any())
             {
                 var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 ground.name = "Ground";
@@ -217,7 +405,7 @@ namespace CharacterControllerSystem.EditorTools
             }
 
             if (p.CreateSunIfMissing &&
-                Object.FindObjectsByType<Light>().All(l => l.type != LightType.Directional))
+                Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude).All(l => l.type != LightType.Directional))
             {
                 var sun = new GameObject("Directional Light").AddComponent<Light>();
                 sun.type = LightType.Directional;
@@ -229,7 +417,15 @@ namespace CharacterControllerSystem.EditorTools
             var player = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             player.transform.position = p.SpawnPosition;
             Undo.RegisterCreatedObjectUndo(player, "Add Player");
+            WireCamera(player, p);
+            Selection.activeGameObject = player;
+            Debug.Log($"{Tag} Player added to '{player.scene.name}'. Save the scene and press Play.", player);
+            return player;
+        }
 
+        /// <summary>Puts a ThirdPersonCamera on the main camera (creating one if needed) and points it at the player.</summary>
+        public static void WireCamera(GameObject player, CharacterSetupProfile p)
+        {
             var cam = Camera.main;
             if (cam == null)
             {
@@ -252,51 +448,81 @@ namespace CharacterControllerSystem.EditorTools
             var tpc = player.GetComponent<ThirdPersonController>();
             Undo.RecordObject(tpc, "Wire Camera");
             tpc.CameraTransform = cam.transform;
-            PrefabUtility.RecordPrefabInstancePropertyModifications(tpc);
-
-            EditorSceneManager.MarkSceneDirty(player.scene);
-            Selection.activeGameObject = player;
-            Debug.Log($"{Tag} Player added to '{player.scene.name}'. Save the scene and press Play.", player);
-            return player;
+            if (PrefabUtility.IsPartOfPrefabInstance(tpc)) PrefabUtility.RecordPrefabInstancePropertyModifications(tpc);
+            if (!Application.isPlaying) EditorSceneManager.MarkSceneDirty(player.scene);
         }
 
         // ---------------------------------------------------------------- Defaults
 
-        /// <summary>Fills a fresh profile with the Mixamo assets that ship with this project.</summary>
-        public static void ApplyProjectDefaults(CharacterSetupProfile p)
+        /// <summary>
+        /// Fills the profile with the clips, input and motion matching data bundled in the package.
+        /// Fields already set are kept unless overwrite is true. Characters are left alone.
+        /// </summary>
+        public static void ApplyKitDefaults(CharacterSetupProfile p, bool overwrite)
         {
-            const string anim = "Assets/Art/Animations/XBot/X Bot@";
-            p.Characters.Clear();
-            AddModel(p, "X Bot", "Assets/Art/Characters/XBot/X Bot.fbx");
-            AddModel(p, "Man In Suit", "Assets/Art/Characters/ManInSuit/Man In Suit@T-Pose.fbx");
+            void Set<T>(ref T field, T value) where T : Object
+            {
+                if (value != null && (overwrite || field == null)) field = value;
+            }
+            AnimationClip U(string n) => KitPaths.UalClip(n);
+            AnimationClip M(string n) => KitPaths.MixamoClip(n);
 
-            // Locomotion comes from the MxM mocap library (our Mixamo locomotion clips were removed).
-            p.Idle = KitPaths.MocapClip("WalkingMocapSet.fbx", "01_IdleLoop");
-            p.Walk = KitPaths.MocapClip("WalkingMocapSet.fbx", "24_WalkStraight_Neutral_01");
-            p.Run = KitPaths.MocapClip("RunningMocapSet.fbx", "24_RunCycle_Neutral_01");
-            p.Sprint = KitPaths.MocapClip("SprintMocapSet.fbx", "SprintLoop");
-            p.CrouchIdle = Clip(anim + "Crouching Idle.fbx");
-            p.CrouchWalk = Clip(anim + "Crouch Walk.fbx");
-            p.Jump = Clip(anim + "Jump.fbx");
-            p.Fall = Clip(anim + "Falling.fbx");
-            p.GroundLayers = LayerMask.GetMask("Default");
+            Set(ref p.Idle, KitPaths.MocapClip("WalkingMocapSet.fbx", "01_IdleLoop"));
+            Set(ref p.Walk, KitPaths.MocapClip("WalkingMocapSet.fbx", "24_WalkStraight_Neutral_01"));
+            Set(ref p.Run, KitPaths.MocapClip("RunningMocapSet.fbx", "24_RunCycle_Neutral_01"));
+            Set(ref p.Sprint, KitPaths.MocapClip("SprintMocapSet.fbx", "SprintLoop"));
+            Set(ref p.CrouchIdle, U("Crouch_Idle_Loop"));
+            Set(ref p.CrouchWalk, U("Crouch_Fwd_Loop"));
+            Set(ref p.Jump, U("Jump_Start"));
+            Set(ref p.JumpLoop, U("Jump_Loop"));
+            Set(ref p.Fall, M("Falling"));
+            Set(ref p.Land, U("Jump_Land"));
+            Set(ref p.Roll, U("Roll"));
+            Set(ref p.StrafeWalkForward, M("Strafe Walk Forward"));
+            Set(ref p.StrafeWalkLeft, M("Strafe Walk Left"));
+            Set(ref p.StrafeWalkRight, M("Strafe Walk Right"));
+            Set(ref p.StrafeRunForward, M("Strafe Run Forward"));
+            Set(ref p.StrafeRunLeft, M("Strafe Run Left"));
+            Set(ref p.StrafeRunRight, M("Strafe Run Right"));
+            Set(ref p.StrafeTurnLeft, M("Strafe Turn Left 90"));
+            Set(ref p.StrafeTurnRight, M("Strafe Turn Right 90"));
+            Set(ref p.HangIdle, M("Hanging Idle"));
+            Set(ref p.HangShimmy, M("Braced Hang Shimmy"));
+            Set(ref p.LadderClimb, M("Climbing Ladder"));
+            Set(ref p.SwimIdle, U("Swim_Idle_Loop"));
+            Set(ref p.SwimForward, U("Swim_Fwd_Loop"));
+            Set(ref p.SlopeSlide, KitPaths.EventClip("RunSlide_ToRight_1.anim"));
+            Set(ref p.DeathA, U("Death01"));
+            Set(ref p.DeathB, M("Dying Backwards"));
+            Set(ref p.SitEnter, U("Sitting_Enter"));
+            Set(ref p.SitIdle, U("Sitting_Idle_Loop"));
+            Set(ref p.SitExit, U("Sitting_Exit"));
+            Set(ref p.Interact, U("Interact"));
+            Set(ref p.PickUp, U("PickUp_Table"));
+            Set(ref p.Jab, U("Punch_Jab"));
+            Set(ref p.Cross, U("Punch_Cross"));
+            Set(ref p.Repair, U("Fixing_Kneeling"));
+            Set(ref p.Dance, U("Dance_Loop"));
+            Set(ref p.Talk, U("Idle_Talking_Loop"));
+            Set(ref p.Push, U("Push_Loop"));
+            Set(ref p.HitChest, U("Hit_Chest"));
+            Set(ref p.HitHead, U("Hit_Head"));
+            Set(ref p.MountIdle, U("Sitting_Idle_Loop"));
+            if (overwrite || p.ParkourClips.Count == 0) p.ParkourClips = ParkourBuilder.DefaultSources();
+
+            Set(ref p.MotionMatchingData, AssetDatabase.LoadAssetAtPath<ScriptableObject>(KitPaths.MxmAnimData));
+            Set(ref p.WalkInputProfile, AssetDatabase.LoadAssetAtPath<ScriptableObject>(KitPaths.MxmProfiles + "MocapInputProfile_Balanced.asset"));
+            Set(ref p.SprintInputProfile, AssetDatabase.LoadAssetAtPath<ScriptableObject>(KitPaths.MxmProfiles + "MocapSprintInputProfile_Balanced.asset"));
+            Set(ref p.StrafeInputProfile, AssetDatabase.LoadAssetAtPath<ScriptableObject>(KitPaths.MxmProfiles + "MocapStrafeInputProfile_Balanced.asset"));
+            Set(ref p.MotionMatchingTemplate, AssetDatabase.LoadAssetAtPath<GameObject>(KitPaths.MxmDemoCharacter));
 #if ENABLE_INPUT_SYSTEM
-            p.InputActions = AssetDatabase.LoadAssetAtPath<InputActionAsset>("Assets/Settings/Input/PlayerControls.inputactions");
+            Set(ref p.InputActions, AssetDatabase.LoadAssetAtPath<InputActionAsset>(KitPaths.InputActions));
 #endif
+            if (overwrite) p.GroundLayers = LayerMask.GetMask("Default");
+            EditorUtility.SetDirty(p);
         }
 
         // ---------------------------------------------------------------- helpers
-
-        private static void AddModel(CharacterSetupProfile p, string name, string path)
-        {
-            var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (model != null) p.Characters.Add(new CharacterSetupProfile.CharacterModel { Name = name, Model = model });
-        }
-
-        private static AnimationClip Clip(string fbxPath) =>
-            AssetDatabase.LoadAllAssetRepresentationsAtPath(fbxPath)
-                .OfType<AnimationClip>()
-                .FirstOrDefault(c => !c.name.StartsWith("__preview__"));
 
         private static void AddChild(BlendTree tree, AnimationClip clip, float threshold, string field)
         {
@@ -330,17 +556,6 @@ namespace CharacterControllerSystem.EditorTools
                 controller.parameters = parameters;
                 return;
             }
-        }
-
-        private static void EnsureFolder(string assetPath) =>
-            EnsureDirectory(Path.GetDirectoryName(assetPath)?.Replace('\\', '/'));
-
-        private static void EnsureDirectory(string dir)
-        {
-            if (string.IsNullOrEmpty(dir) || AssetDatabase.IsValidFolder(dir)) return;
-            string parent = Path.GetDirectoryName(dir)?.Replace('\\', '/');
-            EnsureDirectory(parent);
-            AssetDatabase.CreateFolder(parent, Path.GetFileName(dir));
         }
     }
 }

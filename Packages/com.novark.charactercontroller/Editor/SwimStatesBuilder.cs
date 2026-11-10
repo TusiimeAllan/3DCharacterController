@@ -2,48 +2,35 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
+using static CharacterControllerSystem.EditorTools.AnimatorBuildUtil;
 
 namespace CharacterControllerSystem.EditorTools
 {
     /// <summary>
-    /// Swimming (SwimController): a "Swim" blend tree on SwimSpeed with the UAL (CC0) treading-water idle and
-    /// forward crawl, entered from Any State on the Swimming bool, left for Locomotion when it clears.
-    /// Adds SwimController to the Player prefab. Safe to re-run.
+    /// Swimming (SwimController): a "Swim" blend tree on SwimSpeed with the treading-water idle and forward
+    /// crawl, entered from Any State on the Swimming bool, left for Locomotion when it clears. Safe to re-run.
     /// </summary>
     public static class SwimStatesBuilder
     {
         private const string Tag = "[SwimStatesBuilder]";
-        private const string ControllerPath = "Assets/Art/Animations/PlayerAnimator.controller";
-        private const string PlayerPrefab = "Assets/Art/Characters/Player.prefab";
-        private const string UalPath = "Assets/Art/Animations/UAL/UAL1_Standard.fbx";
         private const string StateName = "Swim";
 
-        [MenuItem("Tools/Character Controller/Add Swimming")]
-        public static void BuildAll()
+        public static bool Apply(AnimatorController controller, CharacterSetupProfile p)
         {
-            Apply(AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath));
-            SetUpPlayer();
-        }
-
-        public static void Apply(AnimatorController controller)
-        {
-            var clips = AssetDatabase.LoadAllAssetRepresentationsAtPath(UalPath).OfType<AnimationClip>().ToList();
-            var idle = clips.FirstOrDefault(c => c.name == "Swim_Idle_Loop");
-            var fwd = clips.FirstOrDefault(c => c.name == "Swim_Fwd_Loop");
-            if (controller == null || idle == null || fwd == null)
-            {
-                Debug.LogError($"{Tag} Controller or UAL swim clips missing.");
-                return;
-            }
-            if (controller.parameters.All(p => p.name != "Swimming")) controller.AddParameter("Swimming", AnimatorControllerParameterType.Bool);
-            if (controller.parameters.All(p => p.name != "SwimSpeed")) controller.AddParameter("SwimSpeed", AnimatorControllerParameterType.Float);
-
+            var missing = Missing(("SwimIdle", p.SwimIdle), ("SwimForward", p.SwimForward));
             var sm = controller.layers[0].stateMachine;
-            var loco = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == "Locomotion");
-            if (loco == null) return;
+            var loco = State(sm, "Locomotion");
+            if (missing.Length > 0 || loco == null)
+            {
+                if (missing.Length > 0) Skip(Tag, "Swimming", missing);
+                return false;
+            }
+            Param(controller, "Swimming", AnimatorControllerParameterType.Bool);
+            Param(controller, "SwimSpeed", AnimatorControllerParameterType.Float);
+
             foreach (var t in sm.anyStateTransitions.Where(t => t.destinationState != null && t.destinationState.name == StateName).ToArray())
                 sm.RemoveAnyStateTransition(t);
-            var old = sm.states.Select(s => s.state).FirstOrDefault(s => s.name == StateName);
+            var old = State(sm, StateName);
             if (old != null)
             {
                 if (old.motion is BlendTree bt && AssetDatabase.IsSubAsset(bt)) Object.DestroyImmediate(bt, true);
@@ -56,9 +43,9 @@ namespace CharacterControllerSystem.EditorTools
                 useAutomaticThresholds = false, hideFlags = HideFlags.HideInHierarchy,
             };
             AssetDatabase.AddObjectToAsset(tree, controller);
-            tree.AddChild(idle, 0f);
-            tree.AddChild(fwd, 1.6f);
-            tree.AddChild(fwd, 2.8f);
+            tree.AddChild(p.SwimIdle, 0f);
+            tree.AddChild(p.SwimForward, 1.6f);
+            tree.AddChild(p.SwimForward, 2.8f);
             var children = tree.children;
             children[2].timeScale = 1.5f; // sprint-swim: faster strokes
             tree.children = children;
@@ -74,27 +61,24 @@ namespace CharacterControllerSystem.EditorTools
             enter.duration = 0.3f;
             enter.AddCondition(AnimatorConditionMode.If, 0f, "Swimming");
 
-            var exit = state.AddTransition(loco);
-            exit.hasExitTime = false;
-            exit.duration = 0.3f;
-            exit.AddCondition(AnimatorConditionMode.IfNot, 0f, "Swimming");
-
+            Cond(state, loco, 0.3f, (AnimatorConditionMode.IfNot, 0f, "Swimming"));
             EditorUtility.SetDirty(controller);
-            AssetDatabase.SaveAssets();
-            Debug.Log($"{Tag} Swim state added.");
+            return true;
         }
 
-        private const string SplashMaterialPath = "Assets/Art/Effects/WaterSplash.mat";
-
-        /// <summary>Soft round droplet material for splash particles (URP Particles/Unlit, alpha blended).</summary>
-        public static Material SplashMaterial()
+        /// <summary>Soft round droplet material for splash particles (unlit, alpha blended, any pipeline).</summary>
+        public static Material SplashMaterial(CharacterSetupProfile p)
         {
-            var mat = AssetDatabase.LoadAssetAtPath<Material>(SplashMaterialPath);
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(p.SplashMaterialPath);
             if (mat == null)
             {
-                System.IO.Directory.CreateDirectory("Assets/Art/Effects");
-                mat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
-                AssetDatabase.CreateAsset(mat, SplashMaterialPath);
+                var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                if (shader == null) shader = Shader.Find("HDRP/Unlit");
+                if (shader == null) shader = Shader.Find("Particles/Standard Unlit");
+                if (shader == null) shader = Shader.Find("Sprites/Default");
+                EnsureFolderFor(p.SplashMaterialPath);
+                mat = new Material(shader);
+                AssetDatabase.CreateAsset(mat, p.SplashMaterialPath);
             }
             mat.SetFloat("_Surface", 1f);
             mat.SetFloat("_Blend", 0f);
@@ -105,33 +89,26 @@ namespace CharacterControllerSystem.EditorTools
             mat.SetOverrideTag("RenderType", "Transparent");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             var dot = AssetDatabase.GetBuiltinExtraResource<Texture2D>("Default-Particle.psd");
-            if (dot != null) mat.SetTexture("_BaseMap", dot);
-            mat.SetColor("_BaseColor", new Color(0.9f, 0.96f, 1f, 0.9f));
+            if (dot != null)
+            {
+                if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", dot);
+                if (mat.HasProperty("_MainTex")) mat.SetTexture("_MainTex", dot);
+            }
+            var tint = new Color(0.9f, 0.96f, 1f, 0.9f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", tint);
             EditorUtility.SetDirty(mat);
-            AssetDatabase.SaveAssets();
             return mat;
         }
 
-        public static void SetUpPlayer()
+        public static void SetUpPlayer(GameObject root, CharacterSetupProfile p)
         {
-            var root = PrefabUtility.LoadPrefabContents(PlayerPrefab);
-            try
-            {
-                var swim = root.GetComponent<SwimController>();
-                if (swim == null) swim = root.AddComponent<SwimController>();
-                swim.Controller = root.GetComponent<ThirdPersonController>();
-                swim.Parkour = root.GetComponent<ParkourController>();
-                var effects = root.GetComponent<WaterEffects>();
-                if (effects == null) effects = root.AddComponent<WaterEffects>();
-                effects.SplashMaterial = SplashMaterial();
-                swim.Effects = effects;
-                PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefab);
-                Debug.Log($"{Tag} SwimController on {PlayerPrefab}.");
-            }
-            finally
-            {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
+            var swim = Kit.Ensure<SwimController>(root);
+            swim.Controller = root.GetComponent<ThirdPersonController>();
+            swim.Parkour = root.GetComponent<ParkourController>();
+            var effects = Kit.Ensure<WaterEffects>(root);
+            effects.SplashMaterial = SplashMaterial(p);
+            swim.Effects = effects;
         }
     }
 }

@@ -19,7 +19,7 @@ namespace CharacterControllerSystem
     /// </summary>
     [DefaultExecutionOrder(200)] // after animation, motion matching and the controllers have run
     [DisallowMultipleComponent]
-    public class BodyContactSolver : MonoBehaviour
+    public class BodyContactSolver : MonoBehaviour, IBodyScaled
     {
         public bool EnableDepenetration = true;
         public bool EnableHandPlanting = true;
@@ -138,15 +138,16 @@ namespace CharacterControllerSystem
                 // Deepest push up, and the strongest horizontal push, over all probes.
                 float up = 0f, down = 0f;
                 Vector3 side = Vector3.zero;
-                foreach (var (bone, radius) in BodyProbes)
+                foreach (var (bone, probeRadius) in BodyProbes)
                 {
+                    float radius = probeRadius * _bs;
                     var t = _animator.GetBoneTransform(bone);
                     if (t == null) continue;
                     Vector3 p = t.position;
                     // Floors and tops from above: a probe under a surface is pushed up onto it (a penetration
                     // test would push a probe already below a thin floor out through the bottom).
-                    if (Physics.Raycast(new Vector3(p.x, p.y + 0.6f, p.z), Vector3.down, out RaycastHit floor,
-                            0.6f + radius, Controller.GroundLayers, QueryTriggerInteraction.Ignore) &&
+                    if (Physics.Raycast(new Vector3(p.x, p.y + 0.6f * _bs, p.z), Vector3.down, out RaycastHit floor,
+                            0.6f * _bs + radius, Controller.GroundLayers, QueryTriggerInteraction.Ignore) &&
                         !floor.transform.IsChildOf(transform) && Vector3.Angle(floor.normal, Vector3.up) < 50f)
                         up = Mathf.Max(up, floor.point.y + radius - p.y);
                     _probe.radius = radius;
@@ -196,9 +197,9 @@ namespace CharacterControllerSystem
                 var t = _animator.GetBoneTransform(bone);
                 if (t == null) continue;
                 Vector3 p = t.position;
-                Vector3 from = new Vector3(p.x, hipsY, p.z);
-                if (p.y - radius <= hipsY) continue;
-                if (Physics.SphereCast(from, radius, Vector3.up, out RaycastHit roof, 2.5f, Controller.GroundLayers,
+                Vector3 from = new Vector3(p.x, hipsY, p.z); float r = radius * _bs;
+                if (p.y - r <= hipsY) continue;
+                if (Physics.SphereCast(from, r, Vector3.up, out RaycastHit roof, 2.5f * _bs, Controller.GroundLayers,
                         QueryTriggerInteraction.Ignore) && !roof.transform.IsChildOf(transform) && roof.normal.y < -0.3f)
                     worst = Mathf.Max(worst, (p.y - hipsY) - roof.distance);
             }
@@ -250,7 +251,7 @@ namespace CharacterControllerSystem
             var end = _animator.GetBoneTransform(hand.End);
             if (upper == null || lower == null || end == null) return;
             Vector3 animated = end.position;
-            Vector3 plane = ladder.Bottom + ladder.Out * 0.03f;
+            Vector3 plane = ladder.Bottom + ladder.Out * (0.03f * _bs);
             Vector3 target = animated - ladder.Out * Vector3.Dot(animated - plane, ladder.Out);
             hand.Weight = Mathf.MoveTowards(hand.Weight, 1f, PlantInRate * dt);
             TwoBoneIK(upper, lower, end, Vector3.Lerp(animated, target, hand.Weight));
@@ -283,7 +284,7 @@ namespace CharacterControllerSystem
                 if (contact > 0f && !hand.Planted)
                 {
                     Vector3 onLine = edgePoint + edgeTangent * Vector3.Dot(animated - edgePoint, edgeTangent);
-                    hand.Target = onLine + edgeFace * EdgeInset + Vector3.up * 0.035f;
+                    hand.Target = onLine + edgeFace * EdgeInset + Vector3.up * (0.035f * _bs);
                     hand.Planted = true;
                 }
                 if (contact <= 0f) hand.Planted = false;
@@ -298,14 +299,14 @@ namespace CharacterControllerSystem
                 Vector3 edge = Parkour.LedgePoint;
                 // Closest point on the edge line, then a palm's width onto the top surface.
                 Vector3 onEdge = edge + tangent * Vector3.Dot(animated - edge, tangent);
-                Vector3 target = onEdge + face * EdgeInset + Vector3.up * 0.035f;
+                Vector3 target = onEdge + face * EdgeInset + Vector3.up * (0.035f * _bs);
 
                 if (!hand.Planted)
                 {
                     // Plant when the hand comes up to the edge, from the near side, and is not already past it.
                     bool near = (animated - target).magnitude < PlantReach;
-                    bool beside = Vector3.Dot(animated - edge, face) < 0.45f;
-                    bool high = animated.y > Parkour.LedgeTop - 0.45f;
+                    bool beside = Vector3.Dot(animated - edge, face) < 0.45f * _bs;
+                    bool high = animated.y > Parkour.LedgeTop - 0.45f * _bs;
                     if (near && beside && high)
                     {
                         hand.Planted = true;
@@ -333,8 +334,8 @@ namespace CharacterControllerSystem
         /// <summary>The collider the current move climbs or vaults (found just inside its edge).</summary>
         private Collider FindObstacle()
         {
-            Vector3 inside = Parkour.LedgePoint + Parkour.LedgeFace * 0.06f - Vector3.up * 0.06f;
-            int n = Physics.OverlapSphereNonAlloc(inside, 0.03f, _overlaps, Controller.GroundLayers, QueryTriggerInteraction.Ignore);
+            Vector3 inside = Parkour.LedgePoint + Parkour.LedgeFace * (0.06f * _bs) - Vector3.up * (0.06f * _bs);
+            int n = Physics.OverlapSphereNonAlloc(inside, 0.03f * _bs, _overlaps, Controller.GroundLayers, QueryTriggerInteraction.Ignore);
             for (int i = 0; i < n; i++)
                 if (_overlaps[i] != null && !_overlaps[i].transform.IsChildOf(transform)) return _overlaps[i];
             return null;
@@ -406,7 +407,8 @@ namespace CharacterControllerSystem
             TwoBoneIK(upper, lower, end, target, _obstacle != null ? _elbowPenalty : null);
         }
 
-        private const float HandRadius = 0.035f, ElbowRadius = 0.05f;
+        private float HandRadius => 0.035f * _bs;
+        private float ElbowRadius => 0.05f * _bs;
         private System.Func<Vector3, float> _elbowPenalty;
 
         /// <summary>
@@ -463,6 +465,20 @@ namespace CharacterControllerSystem
             Vector3 midNow = mid.position, endNow = end.position;
             mid.rotation = Quaternion.FromToRotation(endNow - midNow, target - midNow) * mid.rotation;
             end.rotation = endRotation;
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            MaxPush *= k;
+            PlantReach *= k;
+            ReleaseDistance *= k;
+            EdgeInset *= k;
+            _bs = s;
         }
     }
 }

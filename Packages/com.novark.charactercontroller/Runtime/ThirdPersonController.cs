@@ -10,7 +10,7 @@ namespace CharacterControllerSystem
     /// Drives a Humanoid Animator via Speed / MotionSpeed / Grounded / Jump / FreeFall / Crouch.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public class ThirdPersonController : MonoBehaviour
+    public class ThirdPersonController : MonoBehaviour, IBodyScaled, IBodyHeightScaled
     {
         [Header("Player")]
         [Tooltip("Move speed of the character in m/s")]
@@ -279,7 +279,7 @@ namespace CharacterControllerSystem
             GroundNormal = Vector3.up;
             if (Grounded)
             {
-                int n = Physics.RaycastNonAlloc(transform.position + Vector3.up * 0.3f, Vector3.down, _groundRayHits, 0.7f,
+                int n = Physics.RaycastNonAlloc(transform.position + Vector3.up * (0.3f * _bs), Vector3.down, _groundRayHits, 0.7f * _bs,
                     GroundLayers, QueryTriggerInteraction.Ignore);
                 float nearest = float.MaxValue;
                 for (int i = 0; i < n; i++)
@@ -303,7 +303,7 @@ namespace CharacterControllerSystem
             // alone, so the character stands up again on leaving), and shrink further if even crouching won't fit.
             float clearance = Headroom();
             if (!wantsCrouch && clearance < StandingHeight) wantsCrouch = true;
-            float crouchHeight = Mathf.Clamp(clearance - 0.05f, 2f * _controller.radius + 0.1f, CrouchingHeight);
+            float crouchHeight = Mathf.Clamp(clearance - 0.05f * _bs, 2f * _controller.radius + 0.1f * _bs, CrouchingHeight);
 
             float targetHeight = wantsCrouch ? crouchHeight : StandingHeight;
             _controller.height = Mathf.Lerp(_controller.height, targetHeight, Time.deltaTime * 12f);
@@ -317,7 +317,7 @@ namespace CharacterControllerSystem
         private float Headroom()
         {
             float r = _controller.radius * 0.9f;
-            float lift = _controller.radius + 0.05f;
+            float lift = _controller.radius + 0.05f * _bs;
             Vector3 start = transform.position + Vector3.up * lift;
             int hits = Physics.SphereCastNonAlloc(start, r, Vector3.up, _headroomHits, StandingHeight - lift,
                 GroundLayers, QueryTriggerInteraction.Ignore);
@@ -571,6 +571,37 @@ namespace CharacterControllerSystem
             Gizmos.color = Grounded ? transparentGreen : transparentRed;
             Gizmos.DrawSphere(new Vector3(transform.position.x, transform.position.y - GroundedOffset,
                 transform.position.z), GroundedRadius);
+        }
+        // ---------------------------------------------------------------- body scale
+
+        private float _bs = 1f; // body size relative to the reference (X Bot); scales the distances below
+
+        /// <summary>Scales the distances and speeds to the body (see CharacterDimensions), relative to the current scale.</summary>
+        public void ApplyBodyScale(float s)
+        {
+            float k = s / _bs; // relative, so values changed at runtime survive a re-scale
+            MoveSpeed *= k;
+            SprintSpeed *= k;
+            CrouchSpeed *= k;
+            SpeedChangeRate *= k;
+            JumpHeight *= k;
+            GroundedOffset *= k;
+            GroundedRadius *= k;
+            SteepSlideSpeed *= k;
+            SteepSlideAcceleration *= k;
+            StrafeSprintSpeed *= k;
+            _bs = s;
+        }
+
+        private float _hs = 1f;
+
+        /// <summary>Standing and crouching capsule heights follow the character's real height.</summary>
+        public void ApplyBodyHeight(float h)
+        {
+            float k = h / _hs;
+            StandingHeight *= k;
+            CrouchingHeight *= k;
+            _hs = h;
         }
     }
 }
