@@ -55,7 +55,10 @@ namespace CharacterControllerSystem.EditorTools
             }
 
             if (model.GetComponentsInChildren<MeshFilter>(true).Any(f => f.sharedMesh != null))
-                return new Report { Status = Status.AutoRig, Height = height, Message = "No skeleton: will be auto-rigged from X Bot (best in a T-pose)." + size + units };
+                return new Report { Status = Status.AutoRig, Height = height, Message =
+                    "No skeleton. Recommended: rig it first (for example upload it to mixamo.com and download it in a T-pose), then add the rigged file. " +
+                    "Otherwise it will be auto-rigged from the kit skeleton (experimental: fine for human proportions in a T-pose, " +
+                    "stylised bodies, big heads and hair may deform)." + size + units };
 
             return new Report { Status = Status.Unsupported, Height = height, Message = "No mesh found on this object." };
         }
@@ -75,6 +78,8 @@ namespace CharacterControllerSystem.EditorTools
             {
                 case Status.Ready:
                     if (UnitCorrection(report.Height) != 1f && !FixUnits(model, report.Height)) return null;
+                    // An avatar built before its model was resized describes the old size: rebuild it.
+                    if (!AvatarMatchesMesh(model) && !RebuildAvatar(model)) return null;
                     return model;
                 case Status.ConvertToHumanoid:
                     if (UnitCorrection(report.Height) != 1f && !FixUnits(model, report.Height)) return null;
@@ -148,6 +153,54 @@ namespace CharacterControllerSystem.EditorTools
             importer.globalScale *= k;
             importer.SaveAndReimport();
             Debug.Log($"{Tag} {importer.assetPath} imported x{k:0.###} (was {height:F2} m, now {height * k:F2} m).");
+            // A Humanoid keeps the skeleton it stored at the old size; map it again at the new one.
+            if (importer.animationType == ModelImporterAnimationType.Human) return RebuildAvatar(model);
+            return true;
+        }
+
+        /// <summary>
+        /// True when the model's Humanoid avatar fits its mesh: its human scale (hip height) against the mesh's
+        /// height is within what any humanoid, from long legged to chibi, can have.
+        /// </summary>
+        public static bool AvatarMatchesMesh(GameObject model)
+        {
+            var avatar = CharacterSetupBuilder.FindAvatar(model);
+            if (avatar == null || !avatar.isHuman) return true; // nothing to compare
+            var instance = Object.Instantiate(model);
+            instance.hideFlags = HideFlags.HideAndDontSave;
+            try
+            {
+                var animator = instance.GetComponent<Animator>() ?? instance.AddComponent<Animator>();
+                animator.avatar = avatar;
+                float height = CharacterDimensions.MeasureHeight(instance.transform);
+                if (height <= 0f) return true;
+                float ratio = animator.humanScale / height; // X Bot: 0.58
+                return ratio > 0.2f && ratio < 1.2f;
+            }
+            finally { Object.DestroyImmediate(instance); }
+        }
+
+        /// <summary>Clears the importer's stored bone mapping and skeleton so Unity maps the model again as it is now.</summary>
+        private static bool RebuildAvatar(GameObject model)
+        {
+            var importer = SkinImporter(model);
+            if (importer == null || !Writable(importer.assetPath)) return false;
+            var hd = importer.humanDescription;
+            hd.human = new HumanBone[0];
+            hd.skeleton = new SkeletonBone[0];
+            importer.humanDescription = hd;
+            importer.animationType = ModelImporterAnimationType.Human;
+            importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            importer.autoGenerateAvatarMappingIfUnspecified = true;
+            importer.SaveAndReimport();
+            var avatar = AssetDatabase.LoadAllAssetsAtPath(importer.assetPath).OfType<Avatar>().FirstOrDefault();
+            if (avatar == null || !avatar.isValid || !avatar.isHuman)
+            {
+                Debug.LogError($"{Tag} Could not rebuild the avatar of {importer.assetPath}; open Rig > Configure.",
+                    AssetDatabase.LoadMainAssetAtPath(importer.assetPath));
+                return false;
+            }
+            Debug.Log($"{Tag} {importer.assetPath}: avatar rebuilt at the model's size.");
             return true;
         }
 
@@ -294,12 +347,40 @@ namespace CharacterControllerSystem.EditorTools
                 var fittedPositions = originals.Select(o => Fit(o.position)).ToArray();
                 var indexOf = new Dictionary<Transform, int>();
                 for (int i = 0; i < originals.Length; i++) indexOf[originals[i]] = i;
+                var fitted = source.Points.Select(Fit).ToArray();
+
+                // Arms: put each hand where the model's hand is. The whole arm chain (bones and the weight template
+                // around them) turns and stretches about the shoulder joint to reach it.
+                var armTurn = new Dictionary<int, Quaternion>();
+                foreach (var upperBone in new[] { HumanBodyBones.LeftUpperArm, HumanBodyBones.RightUpperArm })
+                {
+                    var upper = xAnimator.GetBoneTransform(upperBone);
+                    if (upper == null || !indexOf.TryGetValue(upper, out int ui)) continue;
+                    var chain = new HashSet<int>(upper.GetComponentsInChildren<Transform>(true).Where(indexOf.ContainsKey).Select(t => indexOf[t]));
+                    var chainNames = new HashSet<string>(upper.GetComponentsInChildren<Transform>(true).Select(t => t.name));
+                    if (!FitArm(fittedPositions, fitted, source, chain, chainNames, ui, verts, bounds, tMarks, out var turn, out var stretch, out string report))
+                    {
+                        Debug.Log($"{Tag} {name}: {upperBone} kept as fitted ({report}).");
+                        continue;
+                    }
+                    Vector3 pivot = fittedPositions[ui];
+                    foreach (int j in chain)
+                    {
+                        fittedPositions[j] = pivot + turn * (fittedPositions[j] - pivot) * stretch;
+                        armTurn[j] = turn;
+                    }
+                    for (int p = 0; p < fitted.Length; p++)
+                        if (chainNames.Contains(source.BoneNames[Dominant(source.Weights[p])]))
+                            fitted[p] = pivot + turn * (fitted[p] - pivot) * stretch;
+                    Debug.Log($"{Tag} {name}: {upperBone} {report}.");
+                }
+
                 for (int i = 0; i < copies.Length; i++)
                 {
                     // Each bone keeps pointing along its limb (towards its only child) after the joints moved, so
                     // animation bends the limb where it bends instead of twisting it.
                     var o = originals[i];
-                    Quaternion rotation = o.rotation;
+                    Quaternion rotation = armTurn.TryGetValue(i, out var turned) ? turned * o.rotation : o.rotation;
                     if (o.childCount == 1 && indexOf.TryGetValue(o.GetChild(0), out int c))
                     {
                         Vector3 before = o.GetChild(0).position - o.position;
@@ -314,16 +395,67 @@ namespace CharacterControllerSystem.EditorTools
                 var bones = source.BoneNames.Select(n => byName.TryGetValue(n, out var t) ? t : hips).ToArray();
 
                 // Skin weights from the closest fitted X Bot points.
-                var fitted = source.Points.Select(Fit).ToArray();
-                mesh.boneWeights = TransferWeights(verts, mesh.triangles, fitted, source.Weights, bounds.size.y);
+                var weights = TransferWeights(verts, mesh.triangles, fitted, source.Weights, bounds.size.y);
+
+                // The head is rigid: everything above the head joint follows the head bone alone, and the neck
+                // blends from neck to head, so the face, hair and hood can never be pulled apart.
+                int BoneIndex(HumanBodyBones b)
+                {
+                    var t = xAnimator.GetBoneTransform(b);
+                    return t != null ? System.Array.IndexOf(source.BoneNames, t.name) : -1;
+                }
+                int headIndex = BoneIndex(HumanBodyBones.Head), neckIndex = BoneIndex(HumanBodyBones.Neck);
+                if (headIndex >= 0 && byName.TryGetValue(source.BoneNames[headIndex], out var headBone))
+                {
+                    float headY = headBone.position.y;
+                    float neckY = neckIndex >= 0 && byName.TryGetValue(source.BoneNames[neckIndex], out var neckBone)
+                        ? neckBone.position.y : headY - bounds.size.y * 0.04f;
+                    int rigidHead = 0;
+                    for (int v = 0; v < verts.Length; v++)
+                    {
+                        float y = verts[v].y;
+                        if (y >= headY)
+                        {
+                            weights[v] = new BoneWeight { boneIndex0 = headIndex, weight0 = 1f };
+                            rigidHead++;
+                        }
+                        else if (neckIndex >= 0 && y > neckY && headY - neckY > 1e-4f)
+                        {
+                            float k = (y - neckY) / (headY - neckY);
+                            weights[v] = new BoneWeight { boneIndex0 = headIndex, weight0 = k, boneIndex1 = neckIndex, weight1 = 1f - k };
+                        }
+                    }
+                    Debug.Log($"{Tag} {name}: {rigidHead} vertices follow the head.");
+                }
+                mesh.boneWeights = weights;
                 mesh.bindposes = bones.Select(b => b.worldToLocalMatrix * rig.transform.localToWorldMatrix).ToArray();
                 mesh.name = name + "_Mesh";
 
-                // Back to a T-pose: the avatar's reference pose (the mesh keeps its own pose through the bind poses).
-                if (armDrop > 0f)
+                // Back to a T-pose, the avatar's reference pose (the mesh keeps its own pose through the bind poses):
+                // each arm straightened out sideways, shoulder, elbow and wrist in a line.
+                foreach (var (upperBone, lowerBone, handBone, fingerBone) in new[]
+                         {
+                             (HumanBodyBones.LeftUpperArm, HumanBodyBones.LeftLowerArm, HumanBodyBones.LeftHand, HumanBodyBones.LeftMiddleProximal),
+                             (HumanBodyBones.RightUpperArm, HumanBodyBones.RightLowerArm, HumanBodyBones.RightHand, HumanBodyBones.RightMiddleProximal),
+                         })
                 {
-                    var rigArms = new[] { byName[upperArms[0].name], byName[upperArms[1].name] };
-                    PoseArms(rigArms, rigArms.Select(t => t.rotation).ToArray(), -armDrop);
+                    Transform Rig(HumanBodyBones b)
+                    {
+                        var x = xAnimator.GetBoneTransform(b);
+                        return x != null && byName.TryGetValue(x.name, out var t) ? t : null;
+                    }
+                    var u = Rig(upperBone); var l = Rig(lowerBone); var h = Rig(handBone); var fgr = Rig(fingerBone);
+                    if (u == null || l == null) continue;
+                    var outward = new Vector3(Mathf.Sign(l.position.x - u.position.x), 0f, 0f);
+                    void Aim(Transform joint, Transform next)
+                    {
+                        if (joint == null || next == null) return;
+                        var dir = next.position - joint.position;
+                        if (dir.sqrMagnitude > 1e-8f) joint.rotation = Quaternion.FromToRotation(dir, outward) * joint.rotation;
+                    }
+                    Aim(u, l);
+                    Aim(l, h);
+                    Aim(h, fgr);
                 }
 
                 var body = new GameObject(name + "_Body");
@@ -373,6 +505,65 @@ namespace CharacterControllerSystem.EditorTools
                 Object.DestroyImmediate(xbot);
                 if (rig != null) Object.DestroyImmediate(rig);
             }
+        }
+
+        private static int Dominant(BoneWeight w)
+        {
+            int best = w.boneIndex0;
+            float bw = w.weight0;
+            if (w.weight1 > bw) { best = w.boneIndex1; bw = w.weight1; }
+            if (w.weight2 > bw) { best = w.boneIndex2; bw = w.weight2; }
+            if (w.weight3 > bw) { best = w.boneIndex3; }
+            return best;
+        }
+
+        /// <summary>
+        /// Finds how to turn and stretch one fitted X Bot arm (about its shoulder joint) so its hand lands on the
+        /// model's hand: the model's arm tip is its furthest point along the direction X Bot's arm points, below
+        /// the shoulders and out to that side.
+        /// </summary>
+        private static bool FitArm(Vector3[] joints, Vector3[] template, Source source, HashSet<int> chain, HashSet<string> chainNames,
+            int shoulderJoint, Vector3[] verts, Bounds bounds, Landmarks marks, out Quaternion turn, out float stretch, out string report)
+        {
+            turn = Quaternion.identity;
+            stretch = 1f;
+            Vector3 pivot = joints[shoulderJoint];
+            float side = Mathf.Sign(pivot.x - bounds.center.x);
+
+            // X Bot's arm tip (as fitted): its arm points furthest from the shoulder.
+            Vector3 xTip = pivot;
+            float xFar = 0f;
+            for (int p = 0; p < template.Length; p++)
+            {
+                if (!chainNames.Contains(source.BoneNames[Dominant(source.Weights[p])])) continue;
+                float d = (template[p] - pivot).sqrMagnitude;
+                if (d > xFar) { xFar = d; xTip = template[p]; }
+            }
+            Vector3 xDir = xTip - pivot;
+            if (xDir.sqrMagnitude < 1e-6f) { report = "no arm on the template"; return false; }
+            Vector3 along = xDir.normalized;
+
+            // The model's arm tip: on this side, below the shoulders, within a cone around X Bot's arm direction.
+            float shoulderY = marks.Found ? marks.Shoulder : pivot.y;
+            float lowest = marks.Found && !float.IsNaN(marks.Crotch) ? marks.Crotch - bounds.size.y * 0.12f : bounds.min.y + bounds.size.y * 0.25f;
+            Vector3 tTip = pivot;
+            float best = 0f;
+            foreach (var v in verts)
+            {
+                if (Mathf.Sign(v.x - bounds.center.x) != side || v.y > shoulderY + bounds.size.y * 0.02f || v.y < lowest) continue;
+                Vector3 d = v - pivot;
+                float reach = Vector3.Dot(d, along);
+                if (reach <= best || Vector3.Angle(d, along) > 40f) continue;
+                best = reach;
+                tTip = v;
+            }
+            Vector3 tDir = tTip - pivot;
+            if (tDir.sqrMagnitude < xDir.sqrMagnitude * 0.16f) { report = "hand not found"; return false; }
+
+            turn = Quaternion.FromToRotation(xDir, tDir);
+            stretch = Mathf.Clamp(tDir.magnitude / xDir.magnitude, 0.6f, 1.6f);
+            report = $"reaches its hand: turned {Quaternion.Angle(Quaternion.identity, turn):F0} deg, length x{stretch:F2}";
+            return true;
         }
 
         private struct Landmarks
@@ -633,13 +824,18 @@ namespace CharacterControllerSystem.EditorTools
                 if (top.Length > 3) { outW.boneIndex3 = top[3].Key; outW.weight3 = top[3].Value / sum; }
                 result[v] = outW;
             }
-            MakeLoosePiecesRigid(result, distance, triangles, verts.Length, height * 0.06f);
+            MakeLoosePiecesRigid(result, distance, triangles, verts, height * 0.06f);
             return result;
         }
 
-        /// <summary>Connected pieces whose vertices sit, on average, further than the threshold from the body get one bone.</summary>
-        private static void MakeLoosePiecesRigid(BoneWeight[] weights, float[] distance, int[] triangles, int count, float threshold)
+        /// <summary>
+        /// Connected pieces that float off the body (on average further than the threshold from it: hair spikes,
+        /// accessories, effects) move rigidly with the body point they are closest to, so they stay attached
+        /// where they sit instead of tearing between unrelated bones.
+        /// </summary>
+        private static void MakeLoosePiecesRigid(BoneWeight[] weights, float[] distance, int[] triangles, Vector3[] verts, float threshold)
         {
+            int count = verts.Length;
             var parent = new int[count];
             for (int i = 0; i < count; i++) parent[i] = i;
             int Find(int x)
@@ -660,25 +856,62 @@ namespace CharacterControllerSystem.EditorTools
                 if (!pieces.TryGetValue(r, out var list)) pieces[r] = list = new List<int>();
                 list.Add(i);
             }
-            int rigid = 0;
+            var loose = new bool[count];
+            var loosePieces = new List<List<int>>();
             foreach (var piece in pieces.Values)
             {
-                float mean = piece.Average(i => distance[i]);
-                if (mean < threshold) continue;
-                var votes = new Dictionary<int, float>();
-                foreach (int i in piece)
-                {
-                    var w = weights[i];
-                    Add(votes, w.boneIndex0, w.weight0);
-                    Add(votes, w.boneIndex1, w.weight1);
-                    Add(votes, w.boneIndex2, w.weight2);
-                    Add(votes, w.boneIndex3, w.weight3);
-                }
-                int bone = votes.OrderByDescending(kv => kv.Value).First().Key;
-                foreach (int i in piece) weights[i] = new BoneWeight { boneIndex0 = bone, weight0 = 1f };
-                rigid++;
+                if (piece.Average(i => distance[i]) < threshold) continue;
+                loosePieces.Add(piece);
+                foreach (int i in piece) loose[i] = true;
             }
-            if (rigid > 0) Debug.Log($"{Tag} Auto-rig bound {rigid} loose piece(s) rigidly to one bone each.");
+            if (loosePieces.Count == 0) return;
+
+            // The body: every vertex that is not part of a loose piece, in a grid for nearest lookups.
+            float cell = Mathf.Max(1e-3f, threshold);
+            Vector3Int Key(Vector3 p) => new Vector3Int(Mathf.FloorToInt(p.x / cell), Mathf.FloorToInt(p.y / cell), Mathf.FloorToInt(p.z / cell));
+            var grid = new Dictionary<Vector3Int, List<int>>();
+            for (int i = 0; i < count; i++)
+            {
+                if (loose[i]) continue;
+                var k = Key(verts[i]);
+                if (!grid.TryGetValue(k, out var list)) grid[k] = list = new List<int>();
+                list.Add(i);
+            }
+            if (grid.Count == 0) return;
+
+            foreach (var piece in loosePieces)
+            {
+                int anchor = -1;
+                float bestDistance = float.MaxValue;
+                void Search(Vector3 from, int r)
+                {
+                    var c = Key(from);
+                    for (int x = -r; x <= r; x++)
+                    for (int y = -r; y <= r; y++)
+                    for (int z = -r; z <= r; z++)
+                    {
+                        if (!grid.TryGetValue(new Vector3Int(c.x + x, c.y + y, c.z + z), out var list)) continue;
+                        foreach (int b in list)
+                        {
+                            float d = (verts[b] - from).sqrMagnitude;
+                            if (d < bestDistance) { bestDistance = d; anchor = b; }
+                        }
+                    }
+                }
+                // Where the piece touches the body: the body vertex closest to any of its vertices, nearby first.
+                foreach (int i in piece) Search(verts[i], 1);
+                if (anchor < 0)
+                {
+                    // Far out (a floating effect): the body point closest to the piece's centre.
+                    var centre = Vector3.zero;
+                    foreach (int i in piece) centre += verts[i];
+                    centre /= piece.Count;
+                    for (int r = 2; r <= 40 && anchor < 0; r += 2) Search(centre, r);
+                }
+                if (anchor < 0) continue;
+                foreach (int i in piece) weights[i] = weights[anchor];
+            }
+            Debug.Log($"{Tag} Auto-rig attached {loosePieces.Count} loose piece(s) to the body point each sits on.");
         }
 
         private static void Add(Dictionary<int, float> d, int bone, float w)

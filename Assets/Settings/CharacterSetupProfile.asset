@@ -17,6 +17,8 @@ MonoBehaviour:
     Model: {fileID: 919132149155446097, guid: e2a545ae9cb70254187e81c1fa2c28a9, type: 3}
   - Name: Man In Suit
     Model: {fileID: 919132149155446097, guid: 78c532bc4f4762e4daba2aade3df02ee, type: 3}
+  - Name: Amaro
+    Model: {fileID: 919132149155446097, guid: cb7e24566af183b4cab80bbe6df67f06, type: 3}
   DefaultCharacter: 0
   EnableCrouch: 1
   EnableStrafe: 1

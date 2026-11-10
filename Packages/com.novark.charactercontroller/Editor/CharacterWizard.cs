@@ -173,11 +173,12 @@ namespace CharacterControllerSystem.EditorTools
                     }
                     var r = row.Report.Value;
                     var type = r.Status == CharacterPreparer.Status.Unsupported ? MessageType.Error
+                        : r.Status == CharacterPreparer.Status.AutoRig ? MessageType.Warning
                         : r.Status == CharacterPreparer.Status.Ready ? MessageType.None : MessageType.Info;
                     EditorGUILayout.HelpBox(r.Message, type);
                     if (r.Status == CharacterPreparer.Status.Ready || r.Status == CharacterPreparer.Status.ConvertToHumanoid)
-                        row.UseKitSkeleton = EditorGUILayout.ToggleLeft(new GUIContent("Replace its bones with the kit skeleton",
-                            "Ignore the model's own rig and skin it to the kit's skeleton instead. Use it when the model's rig is broken or unusual; a good rig of its own usually looks better."),
+                        row.UseKitSkeleton = EditorGUILayout.ToggleLeft(new GUIContent("Replace its bones with the kit skeleton (experimental)",
+                            "Ignore the model's own rig and skin it to the kit's skeleton instead. Only for a broken rig: the model's own rig almost always looks better."),
                             row.UseKitSkeleton);
                     if (r.Status == CharacterPreparer.Status.AutoRig || row.UseKitSkeleton)
                         row.Facing = (CharacterPreparer.Facing)EditorGUILayout.EnumPopup(new GUIContent("Model Faces", "Which way the model looks in its own space"), row.Facing);

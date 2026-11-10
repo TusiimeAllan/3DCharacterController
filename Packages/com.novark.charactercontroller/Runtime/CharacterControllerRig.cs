@@ -78,16 +78,30 @@ namespace CharacterControllerSystem
             if (Capsule != null) Capsule.enabled = ccOn;
         }
 
-        /// <summary>Hides (or shows) the rig's parts in the Inspector, so the rig is tuned from this component only.</summary>
+        /// <summary>
+        /// Hides (or shows) the rig's parts in the Inspector, so the rig is tuned from this component only. Only
+        /// the kit's own components are hidden; your own scripts on the Player always stay visible.
+        /// </summary>
         public static void HideParts(CharacterControllerRig rig, bool hide)
         {
             if (rig == null) return;
             foreach (var c in rig.GetComponents<Component>())
             {
                 if (c == null || c is Transform || c == rig) continue;
+                bool part = IsKitPart(c);
                 var flags = c.hideFlags;
-                c.hideFlags = hide ? flags | HideFlags.HideInInspector : flags & ~HideFlags.HideInInspector;
+                c.hideFlags = hide && part ? flags | HideFlags.HideInInspector : flags & ~HideFlags.HideInInspector;
             }
+        }
+
+        /// <summary>A component the kit sets up and shows in this Inspector (not one added by your project).</summary>
+        public static bool IsKitPart(Component c)
+        {
+            if (c is CharacterController || c is Animator) return true;
+            var type = c.GetType();
+            string assembly = type.Assembly.GetName().Name;
+            return assembly.StartsWith("CharacterControllerSystem.") || assembly == "MxM.Runtime" ||
+                   type.FullName == "UnityEngine.InputSystem.PlayerInput";
         }
 
         private void OnValidate() => HideParts(this, !ShowComponents);
