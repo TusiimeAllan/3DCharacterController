@@ -3,7 +3,9 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.EventSystems;
+#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
+#endif
 
 namespace CharacterControllerSystem.EditorTools
 {
@@ -64,7 +66,9 @@ namespace CharacterControllerSystem.EditorTools
             // Sources
             hud.Switcher = FindInScene<CharacterSwitcher>(scene);
             hud.Inputs = FindInScene<PlayerInputs>(scene);
+#if ENABLE_INPUT_SYSTEM
             hud.PlayerInput = FindInScene<UnityEngine.InputSystem.PlayerInput>(scene);
+#endif
             if (hud.Switcher != null)
             {
                 Undo.RecordObject(hud.Switcher, "Hide switcher hint");
@@ -259,7 +263,11 @@ namespace CharacterControllerSystem.EditorTools
         private static void EnsureEventSystem(UnityEngine.SceneManagement.Scene scene)
         {
             if (FindInScene<EventSystem>(scene) != null) return;
+#if ENABLE_INPUT_SYSTEM
             var es = new GameObject("EventSystem", typeof(EventSystem), typeof(InputSystemUIInputModule));
+#else
+            var es = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
+#endif
             Undo.RegisterCreatedObjectUndo(es, "Add EventSystem");
         }
 

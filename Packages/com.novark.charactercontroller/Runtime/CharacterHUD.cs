@@ -236,18 +236,23 @@ namespace CharacterControllerSystem
                 _legend.Add(e);
             }
             var grounding = FindAnyObjectByType<HumanoidGrounding>();
+            var parkour = FindAnyObjectByType<ParkourController>();
+#if ENABLE_INPUT_SYSTEM
             if (grounding != null && !pad)
             {
                 var e = AddLegendEntry(grounding.ToggleKey.ToString(), "Grounding + look-at");
                 e.IsOn = () => grounding.Enabled;
                 _legend.Add(e);
             }
-            var parkour = FindAnyObjectByType<ParkourController>();
             if (parkour != null && !pad)
             {
                 var e = AddLegendEntry(parkour.ToggleKey.ToString(), "Parkour: run at obstacles, sprint + crouch slides");
                 e.IsOn = () => parkour.EnableParkour;
                 _legend.Add(e);
+#else
+            if (parkour != null && !pad)
+            {
+#endif
                 var climbing = parkour.GetComponent<ClimbController>();
                 if (climbing != null)
                 {

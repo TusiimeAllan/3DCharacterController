@@ -156,7 +156,7 @@ ModelImporter:
     7400052: 01_IdleFlair_RollShoulderRight
     7400054: 01_IdleFlair_RollShoulderRight_MIRROR
     7400056: 01_IdleFlair_RollShoulderLeft
-    7400058: 01_IdleFlair_RollShoulderRight_MIRROR
+    7400058: 01_IdleFlair_RollShoulderLeft_MIRROR
     7400060: 01_IdleFlair_StretchArms
     7400062: 01_IdleFlair_StretchArms_MIRROR
     7400064: 01_IdleFlair_ShuffleFeet
@@ -996,7 +996,7 @@ ModelImporter:
       maskSource: {instanceID: 0}
       additiveReferencePoseFrame: 0
     - serializedVersion: 16
-      name: 01_IdleFlair_RollShoulderRight_MIRROR
+      name: 01_IdleFlair_RollShoulderLeft_MIRROR
       takeName: AnimUprisingRig|01_IdleAndFlair_Neutral_02_FINAL
       firstFrame: 1376
       lastFrame: 1553

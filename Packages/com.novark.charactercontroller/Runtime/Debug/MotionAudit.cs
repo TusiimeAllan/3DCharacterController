@@ -93,8 +93,10 @@ namespace CharacterControllerSystem.Diagnostics
             _anim = _in.GetComponent<Animator>();
             _cc = _in.GetComponent<CharacterController>();
 
+#if ENABLE_INPUT_SYSTEM
             var pi = _in.GetComponent<UnityEngine.InputSystem.PlayerInput>();
             if (pi != null) pi.DeactivateInput();
+#endif
             _in.cursorInputForLook = false;
             _in.look = Vector2.zero;
             _dir = new GameObject("AuditDirection").transform;
