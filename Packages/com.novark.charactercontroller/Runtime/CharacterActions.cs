@@ -1,4 +1,3 @@
-using MxM;
 using UnityEngine;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -13,10 +12,10 @@ namespace CharacterControllerSystem
     /// Full-body actions are Animator Controller states (built by ActionStatesBuilder) chosen with the
     /// Action / Dead / Sitting / Pushing parameters. States tagged "Action" lock movement until they end,
     /// "Emote" loops are cancelled by moving. Hit reactions are upper body only, so the legs keep walking:
-    /// with motion matching they play on an MxM layer above everything, otherwise on the controller's
+    /// with a locomotion host (motion matching) they play on its layer above everything, otherwise on the controller's
     /// UpperBody layer.
     /// </summary>
-    [DefaultExecutionOrder(90)] // before MotionMatchingLocomotion reads NeedsControllerLayer
+    [DefaultExecutionOrder(90)] // before LocomotionAnimationHost reads NeedsControllerLayer
     [DisallowMultipleComponent]
     public class CharacterActions : MonoBehaviour
     {
@@ -91,8 +90,7 @@ namespace CharacterControllerSystem
         private static readonly int HitIndexParam = Animator.StringToHash("HitIndex");
 
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
-        private MxMAnimator _mxm;
+        private LocomotionAnimationHost _mm;
 
         private ActionId _requested;   // one-shot asked for, cleared once its state starts
         private float _requestTimeout;
@@ -103,7 +101,7 @@ namespace CharacterControllerSystem
         private float _lastPunchTime = -10f;
         private bool _headNext;
 
-        private int _hitLayer = -1;
+        private bool _hitOnHost;
         private float _hitOutAt = -1f;
         private float _hitOutDuration;
 
@@ -123,8 +121,7 @@ namespace CharacterControllerSystem
         {
             AutoAssign();
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
-            _mxm = GetComponent<MxMAnimator>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             Health = MaxHealth;
             if (Controller == null || Inputs == null)
             {
@@ -279,17 +276,12 @@ namespace CharacterControllerSystem
         private void PlayHit(bool head)
         {
             var clip = head ? HitHeadClip : HitChestClip;
-            if (_mxm != null && clip != null)
+            if (_mm != null && clip != null && _mm.PlayUpperBodyClip(clip, UpperBodyMask, HitBlendIn))
             {
-                if (_hitLayer <= 0) _hitLayer = _mxm.AddLayer(clip, 0f, false, UpperBodyMask);
-                if (_hitLayer > 0)
-                {
-                    _mxm.SetLayerClip(_hitLayer, clip, UpperBodyMask, 0f, 0f);
-                    _mxm.BlendInLayerWithTime(_hitLayer, HitBlendIn);
-                    _hitOutAt = Time.time + clip.length * 0.5f;
-                    _hitOutDuration = clip.length * 0.5f + 0.1f;
-                    return;
-                }
+                _hitOnHost = true;
+                _hitOutAt = Time.time + clip.length * 0.5f;
+                _hitOutDuration = clip.length * 0.5f + 0.1f;
+                return;
             }
             SetInt(HitIndexParam, head ? 1 : 0);
             SetTrigger(HitParam);
@@ -299,7 +291,7 @@ namespace CharacterControllerSystem
         {
             if (_hitOutAt < 0f || Time.time < _hitOutAt) return;
             _hitOutAt = -1f;
-            if (_hitLayer > 0) _mxm.BlendOutLayerWithTime(_hitLayer, _hitOutDuration);
+            if (_hitOnHost) _mm.StopUpperBodyClip(_hitOutDuration);
         }
 
         private void CancelAll()
@@ -313,7 +305,7 @@ namespace CharacterControllerSystem
                 IsSitting = false;
                 SetBool(SittingParam, false);
             }
-            if (_hitLayer > 0) _mxm.BlendOutLayerWithTime(_hitLayer, 0.1f);
+            if (_hitOnHost) _mm.StopUpperBodyClip(0.1f);
             _hitOutAt = -1f;
         }
 

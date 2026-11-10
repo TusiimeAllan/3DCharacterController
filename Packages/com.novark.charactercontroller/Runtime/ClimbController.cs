@@ -61,7 +61,7 @@ namespace CharacterControllerSystem
 
         private PlayerInputs _inputs;
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private CharacterController _cc;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
 
@@ -81,7 +81,7 @@ namespace CharacterControllerSystem
             if (Parkour == null) Parkour = GetComponent<ParkourController>();
             _inputs = GetComponent<PlayerInputs>();
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             _cc = GetComponent<CharacterController>();
         }
 

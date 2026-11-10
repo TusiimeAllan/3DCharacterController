@@ -228,11 +228,11 @@ namespace CharacterControllerSystem
             int count = Switcher != null ? Mathf.Min(Switcher.Characters.Count, 9) : 0;
             if (count > 1) _legend.Add(AddLegendEntry(pad ? "LB / RB" : $"Tab / 1-{count}", "Change character"));
             if (!pad) _legend.Add(AddLegendEntry("Esc", "Free cursor (click to lock)"));
-            var mm = FindAnyObjectByType<MotionMatchingLocomotion>();
-            if (mm != null && !pad)
+            var mm = FindAnyObjectByType<LocomotionAnimationHost>();
+            if (mm != null && !pad && !string.IsNullOrEmpty(mm.ToggleKeyName))
             {
-                var e = AddLegendEntry(mm.ToggleKey.ToString(), "Motion matching");
-                e.IsOn = () => mm.UseMotionMatching;
+                var e = AddLegendEntry(mm.ToggleKeyName, "Motion matching");
+                e.IsOn = () => mm.UseHost;
                 _legend.Add(e);
             }
             var grounding = FindAnyObjectByType<HumanoidGrounding>();

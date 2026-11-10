@@ -85,7 +85,7 @@ namespace CharacterControllerSystem
         public event System.Action<bool> ToggledChanged;
 
         private Animator _animator;
-        private MotionMatchingLocomotion _locomotion;
+        private LocomotionAnimationHost _locomotion;
         private CharacterActions _actions;
         private float _ikWeight;
         private float _pelvisOffset;
@@ -118,7 +118,7 @@ namespace CharacterControllerSystem
         private void Awake()
         {
             _animator = GetComponent<Animator>();
-            _locomotion = GetComponent<MotionMatchingLocomotion>();
+            _locomotion = GetComponent<LocomotionAnimationHost>();
             _actions = GetComponent<CharacterActions>();
             if (Controller == null) Controller = GetComponent<ThirdPersonController>();
             if (CameraTransform == null && Controller != null) CameraTransform = Controller.CameraTransform;

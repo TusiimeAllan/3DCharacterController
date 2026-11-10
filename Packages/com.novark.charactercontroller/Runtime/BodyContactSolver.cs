@@ -55,7 +55,7 @@ namespace CharacterControllerSystem
         };
 
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private SwimController _swim;
         private ClimbController _climb;
         private CharacterActions _actions;
@@ -77,7 +77,7 @@ namespace CharacterControllerSystem
         private void Awake()
         {
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             _swim = GetComponent<SwimController>();
             _climb = GetComponent<ClimbController>();
             _actions = GetComponent<CharacterActions>();

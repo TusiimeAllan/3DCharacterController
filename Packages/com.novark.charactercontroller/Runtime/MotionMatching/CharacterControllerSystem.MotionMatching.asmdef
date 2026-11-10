@@ -1,0 +1,19 @@
+{
+    "name": "CharacterControllerSystem.MotionMatching",
+    "rootNamespace": "CharacterControllerSystem",
+    "references": [
+        "CharacterControllerSystem.Runtime",
+        "MxM.Runtime",
+        "UTIL.Runtime",
+        "Unity.InputSystem"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -22,7 +22,7 @@ namespace CharacterControllerSystem
     [DefaultExecutionOrder(100)] // after ThirdPersonController has updated this frame's state
     [DisallowMultipleComponent]
     [RequireComponent(typeof(MxMAnimator))]
-    public class MotionMatchingLocomotion : MonoBehaviour
+    public class MotionMatchingLocomotion : LocomotionAnimationHost
     {
         [Tooltip("Off = the plain Animator Controller drives everything, for A/B comparison")]
         public bool UseMotionMatching = true;
@@ -78,8 +78,15 @@ namespace CharacterControllerSystem
         private static readonly int SlopeSlideId = Animator.StringToHash("SlopeSlide");
         private const string LandingTag = "Landing";
 
-        /// <summary>True while the Animator Controller plays a landing or roll (states tagged "Landing").</summary>
-        public bool InLandingState { get; private set; }
+        private bool _inLandingState;
+
+        public override bool UseHost => UseMotionMatching;
+#if ENABLE_INPUT_SYSTEM
+        public override string ToggleKeyName => ToggleKey.ToString();
+#endif
+        public override bool InLandingState => _inLandingState;
+
+        private int _upperBodyLayer = -1;
 
         private AnimatorControllerPlayable _controllerLayer;
         private CharacterActions _actions;
@@ -156,13 +163,13 @@ namespace CharacterControllerSystem
             // Hand jump, fall, crouch and strafing to our Animator Controller; ground locomotion to MxM.
             // (The MxM mocap has no sideways or backwards clips, so strafing uses the Strafe blend tree.)
             // Landings and rolls finish on our controller before handing back, so they are not cut off.
-            InLandingState = _controllerLayer.GetCurrentAnimatorStateInfo(0).IsTag(LandingTag) ||
+            _inLandingState = _controllerLayer.GetCurrentAnimatorStateInfo(0).IsTag(LandingTag) ||
                              (_controllerLayer.IsInTransition(0) &&
                               _controllerLayer.GetNextAnimatorStateInfo(0).IsTag(LandingTag));
             // Strafing stays on motion matching (the strafe set) except for standing turns, which use the turn clips.
             bool strafeOnController = Controller.IsStrafing && (!_mxmStrafing || Controller.StrafeTurn != 0);
             bool useController = !UseMotionMatching || !Controller.Grounded || Controller.IsJumping ||
-                                 Controller.IsCrouching || strafeOnController || Controller.ExternallyDriven || Controller.IsSlidingOnSlope || InLandingState ||
+                                 Controller.IsCrouching || strafeOnController || Controller.ExternallyDriven || Controller.IsSlidingOnSlope || _inLandingState ||
                                  (_actions != null && _actions.isActiveAndEnabled && _actions.NeedsControllerLayer);
             float target = useController ? 1f : 0f;
             float duration = target > _layerWeight ? LayerFadeIn : LayerFadeOut;
@@ -279,11 +286,32 @@ namespace CharacterControllerSystem
         }
 
         /// <summary>The hosted Animator Controller, for components that set its parameters (CharacterActions).</summary>
-        public bool TryGetControllerLayer(out AnimatorControllerPlayable layer)
+        public override bool TryGetControllerLayer(out AnimatorControllerPlayable layer)
         {
             bool ok = ResolveControllerLayer();
             layer = _controllerLayer;
             return ok;
+        }
+
+        /// <summary>Upper body clip on an MxM layer above the motion matched pose and the controller layer.</summary>
+        public override bool PlayUpperBodyClip(AnimationClip clip, AvatarMask mask, float blendIn)
+        {
+            if (Mxm == null || clip == null) return false;
+            if (_upperBodyLayer <= 0) _upperBodyLayer = Mxm.AddLayer(clip, 0f, false, mask);
+            if (_upperBodyLayer <= 0) return false;
+            Mxm.SetLayerClip(_upperBodyLayer, clip, mask, 0f, 0f);
+            Mxm.BlendInLayerWithTime(_upperBodyLayer, blendIn);
+            return true;
+        }
+
+        public override void StopUpperBodyClip(float blendOut)
+        {
+            if (Mxm != null && _upperBodyLayer > 0) Mxm.BlendOutLayerWithTime(_upperBodyLayer, blendOut);
+        }
+
+        public override void SetInputReference(Transform reference)
+        {
+            if (Trajectory != null) Trajectory.RelativeCameraTransform = reference;
         }
 
         /// <summary>MxM keeps the controller playable private; read it once it has been created.</summary>

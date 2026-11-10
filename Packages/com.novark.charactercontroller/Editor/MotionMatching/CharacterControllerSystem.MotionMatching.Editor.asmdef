@@ -1,0 +1,20 @@
+{
+    "name": "CharacterControllerSystem.MotionMatching.Editor",
+    "rootNamespace": "CharacterControllerSystem.EditorTools",
+    "references": [
+        "CharacterControllerSystem.Runtime",
+        "CharacterControllerSystem.MotionMatching",
+        "CharacterControllerSystem.Editor",
+        "MxM.Runtime",
+        "UTIL.Runtime"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

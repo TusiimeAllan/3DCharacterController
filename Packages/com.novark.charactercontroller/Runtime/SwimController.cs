@@ -91,7 +91,7 @@ namespace CharacterControllerSystem
         private PlayerInputs _inputs;
         private CharacterController _cc;
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private WaterVolume _water;
         private Vector3 _velocity;
         private float _verticalSpeed;
@@ -119,7 +119,7 @@ namespace CharacterControllerSystem
             _inputs = GetComponent<PlayerInputs>();
             _cc = GetComponent<CharacterController>();
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             _actions = GetComponent<CharacterActions>();
             _wet = GetComponent<CharacterWetness>();
             if (_wet == null) _wet = gameObject.AddComponent<CharacterWetness>();

@@ -63,7 +63,7 @@ namespace CharacterControllerSystem.Diagnostics
         private ParkourController _pk;
         private ClimbController _climb;
         private SwimController _swim;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private Animator _anim;
         private CharacterController _cc;
         private Transform _dir;
@@ -89,7 +89,7 @@ namespace CharacterControllerSystem.Diagnostics
             _pk = _in.GetComponent<ParkourController>();
             _climb = _in.GetComponent<ClimbController>();
             _swim = _in.GetComponent<SwimController>();
-            _mm = _in.GetComponent<MotionMatchingLocomotion>();
+            _mm = _in.GetComponent<LocomotionAnimationHost>();
             _anim = _in.GetComponent<Animator>();
             _cc = _in.GetComponent<CharacterController>();
 
@@ -99,8 +99,7 @@ namespace CharacterControllerSystem.Diagnostics
             _in.look = Vector2.zero;
             _dir = new GameObject("AuditDirection").transform;
             _tpc.CameraTransform = _dir; // scripted moves are relative to this, not the (smart) camera
-            var traj = _in.GetComponent<MxM.MxMTrajectoryGenerator>();
-            if (traj != null) traj.RelativeCameraTransform = _dir;
+            if (_mm != null) _mm.SetInputReference(_dir);
 
             var pgo = new GameObject("AuditProbe") { layer = 2 };
             _probe = pgo.AddComponent<SphereCollider>();

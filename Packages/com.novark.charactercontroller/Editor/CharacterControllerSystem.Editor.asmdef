@@ -1,0 +1,27 @@
+{
+    "name": "CharacterControllerSystem.Editor",
+    "rootNamespace": "CharacterControllerSystem.EditorTools",
+    "references": [
+        "CharacterControllerSystem.Runtime",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro",
+        "UnityEngine.UI",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "",
+            "define": "CCS_URP"
+        }
+    ],
+    "noEngineReferences": false
+}

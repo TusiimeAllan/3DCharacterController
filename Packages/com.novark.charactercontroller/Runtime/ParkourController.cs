@@ -83,7 +83,7 @@ namespace CharacterControllerSystem
 
         private CharacterController _cc;
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private PlayerInputs _inputs;
         private readonly RaycastHit[] _hits = new RaycastHit[8];
 
@@ -102,7 +102,7 @@ namespace CharacterControllerSystem
             if (Controller == null) Controller = GetComponent<ThirdPersonController>();
             _cc = GetComponent<CharacterController>();
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             _inputs = GetComponent<PlayerInputs>();
         }
 

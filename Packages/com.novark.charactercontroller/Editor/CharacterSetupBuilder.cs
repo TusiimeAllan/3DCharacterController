@@ -271,10 +271,10 @@ namespace CharacterControllerSystem.EditorTools
             AddModel(p, "Man In Suit", "Assets/Art/Characters/ManInSuit/Man In Suit@T-Pose.fbx");
 
             // Locomotion comes from the MxM mocap library (our Mixamo locomotion clips were removed).
-            p.Idle = MotionMatchingSetup.MocapClip("WalkingMocapSet.fbx", "01_IdleLoop");
-            p.Walk = MotionMatchingSetup.MocapClip("WalkingMocapSet.fbx", "24_WalkStraight_Neutral_01");
-            p.Run = MotionMatchingSetup.MocapClip("RunningMocapSet.fbx", "24_RunCycle_Neutral_01");
-            p.Sprint = MotionMatchingSetup.MocapClip("SprintMocapSet.fbx", "SprintLoop");
+            p.Idle = KitPaths.MocapClip("WalkingMocapSet.fbx", "01_IdleLoop");
+            p.Walk = KitPaths.MocapClip("WalkingMocapSet.fbx", "24_WalkStraight_Neutral_01");
+            p.Run = KitPaths.MocapClip("RunningMocapSet.fbx", "24_RunCycle_Neutral_01");
+            p.Sprint = KitPaths.MocapClip("SprintMocapSet.fbx", "SprintLoop");
             p.CrouchIdle = Clip(anim + "Crouching Idle.fbx");
             p.CrouchWalk = Clip(anim + "Crouch Walk.fbx");
             p.Jump = Clip(anim + "Jump.fbx");

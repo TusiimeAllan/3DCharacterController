@@ -1,6 +1,8 @@
 using UnityEngine;
+#if CCS_URP
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+#endif
 
 namespace CharacterControllerSystem
 {
@@ -12,6 +14,8 @@ namespace CharacterControllerSystem
     /// - muffled sound (low-pass filter on the listener);
     /// - a gentle sway of the camera.
     /// Everything blends in and out over a short time; the scene's own fog comes back on surfacing.
+    /// The post-processing look needs URP (CCS_URP is defined when the URP package is installed); on other
+    /// pipelines the fog, sound and sway still apply.
     /// Added to the main camera by SwimController. Runs after ThirdPersonCamera so the sway sits on top.
     /// </summary>
     [DefaultExecutionOrder(100)]
@@ -46,12 +50,15 @@ namespace CharacterControllerSystem
         private FogMode _savedMode;
         private float _savedDensity;
         private float _blend;
+#if CCS_URP
         private Volume _volume;
         private LensDistortion _lens;
+#endif
         private AudioLowPassFilter _lowPass;
 
         private void Awake()
         {
+#if CCS_URP
             // URP camera post-processing must be on for the volume to show.
             var data = GetComponent<Camera>() != null ? GetComponent<Camera>().GetUniversalAdditionalCameraData() : null;
             if (data != null) data.renderPostProcessing = true;
@@ -82,6 +89,7 @@ namespace CharacterControllerSystem
             blur.gaussianEnd.Override(18f);
             blur.gaussianMaxRadius.Override(1f);
             _volume.sharedProfile = profile;
+#endif
 
             if (GetComponent<AudioListener>() != null)
             {
@@ -103,12 +111,16 @@ namespace CharacterControllerSystem
             }
 
             _blend = Mathf.MoveTowards(_blend, under ? 1f : 0f, Time.unscaledDeltaTime / Mathf.Max(0.01f, BlendTime));
+#if CCS_URP
             if (_volume != null) _volume.weight = _blend;
+#endif
             if (_lowPass != null) _lowPass.cutoffFrequency = Mathf.Lerp(22000f, MuffledCutoff, _blend);
             if (_blend <= 0.001f) return;
 
             float t = Time.time;
+#if CCS_URP
             if (_lens != null) _lens.intensity.value = Mathf.Sin(t * WobbleSpeed) * WobbleAmount * _blend;
+#endif
             // Sway on top of wherever the follow camera put us this frame.
             transform.rotation = transform.rotation * Quaternion.Euler(0f, 0f, Mathf.Sin(t * 0.9f) * SwayRoll * _blend);
             transform.position += Vector3.up * (Mathf.Sin(t * 1.4f) * SwayBob * _blend);
@@ -131,7 +143,9 @@ namespace CharacterControllerSystem
             if (IsUnderwater) Restore();
             IsUnderwater = false;
             _blend = 0f;
+#if CCS_URP
             if (_volume != null) _volume.weight = 0f;
+#endif
             if (_lowPass != null) _lowPass.cutoffFrequency = 22000f;
         }
 

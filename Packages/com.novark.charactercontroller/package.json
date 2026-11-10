@@ -1,0 +1,16 @@
+{
+  "name": "com.novark.charactercontroller",
+  "version": "1.0.0",
+  "displayName": "Novark Character Controller",
+  "description": "Third person humanoid character system: locomotion with motion matching, crouch, strafe, jump and landings, parkour (vault, climb, drop, slide), ledges and ladders, swimming, actions and emotes, foot grounding and body IK, and an orbit camera. Right-click any humanoid model and choose Make Playable.",
+  "unity": "6000.0",
+  "dependencies": {
+    "com.unity.inputsystem": "1.19.0",
+    "com.unity.ugui": "2.0.0",
+    "com.unity.burst": "1.8.29",
+    "com.unity.collections": "6.4.0",
+    "com.unity.mathematics": "1.3.3"
+  },
+  "keywords": ["character", "controller", "third person", "motion matching", "parkour", "humanoid"],
+  "author": { "name": "Novark" }
+}

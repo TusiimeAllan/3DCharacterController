@@ -131,11 +131,23 @@ namespace CharacterControllerSystem
             var renderer = go.GetComponent<ParticleSystemRenderer>();
             if (SplashMaterial == null)
             {
-                var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+                var shader = FindShader("Universal Render Pipeline/Particles/Unlit", "HDRP/Unlit",
+                    "Particles/Standard Unlit", "Sprites/Default");
                 if (shader != null) SplashMaterial = new Material(shader);
             }
             renderer.sharedMaterial = SplashMaterial;
             return ps;
+        }
+
+        /// <summary>First shader that exists, so the particles render on URP, HDRP or the built-in pipeline.</summary>
+        private static Shader FindShader(params string[] names)
+        {
+            foreach (var n in names)
+            {
+                var shader = Shader.Find(n);
+                if (shader != null) return shader;
+            }
+            return null;
         }
 
         private ParticleSystem MakeBubbles()

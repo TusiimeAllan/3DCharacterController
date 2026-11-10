@@ -41,7 +41,7 @@ namespace CharacterControllerSystem
 
         private static readonly int RidingId = Animator.StringToHash("Riding");
         private Animator _animator;
-        private MotionMatchingLocomotion _mm;
+        private LocomotionAnimationHost _mm;
         private Behaviour[] _paused;
         private float _steer;
         private float _autoLean;
@@ -51,7 +51,7 @@ namespace CharacterControllerSystem
         private void Awake()
         {
             _animator = GetComponent<Animator>();
-            _mm = GetComponent<MotionMatchingLocomotion>();
+            _mm = GetComponent<LocomotionAnimationHost>();
             if (Controller == null) Controller = GetComponent<ThirdPersonController>();
             if (Inputs == null) Inputs = GetComponent<PlayerInputs>();
             // Components that place feet or push the body out of geometry; the seat does that while riding.
